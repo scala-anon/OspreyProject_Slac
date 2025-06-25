@@ -1,0 +1,33 @@
+# CMake build folders
+/build/
+/CMakeFiles/
+/cmake-build-*/
+
+# Build artifacts
+*.o
+*.so
+*.a
+*.out
+*.exe
+
+# Generated proto files
+*.pb.cc
+*.pb.h
+*.grpc.pb.cc
+*.grpc.pb.h
+
+# IDE and editor files
+.vscode/
+.idea/
+*.user
+*.swp
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs or data
+logs/
+data/
+

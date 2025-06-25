@@ -1,0 +1,279 @@
+//
+// common.proto
+//
+// Contains RPC messages common to all services.
+
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "com.ospreydcs.dp.grpc.v1.common";
+
+
+//
+// ------------------- Miscellaneous Definitions ---------------------------
+//
+
+/*
+ * Generic key/value attribute, used as metadata to describe other objects.
+ */
+message Attribute {
+  string name = 1;
+  string value = 2;
+}
+
+/*
+ * Metadata associated with ingested data.
+ */
+message EventMetadata {
+  string description = 1; // Description of the event.
+  Timestamp startTimestamp = 2; // Start time of event.
+  Timestamp stopTimestamp = 3; // End time of event.
+}
+
+
+//
+// ------------------- Time Definitions ---------------------------
+//
+
+/*
+ * Time instant containing fields for seconds since epoch and nanoseconds offset.
+ */
+message Timestamp {
+  uint64 epochSeconds = 1;  // Seconds past unix epoch - 1st january 1970.
+  uint64 nanoseconds = 2;   // Nanoseconds - sub-second precision down to the nanosecond.
+}
+
+/*
+ * Ordered list of Timestamp messages.
+ */
+message TimestampList {
+  repeated Timestamp timestamps = 1;
+}
+
+/*
+ * Collection of timestamps identified by sampling interval.
+ *
+ * Uniform sampling is assumed within sampling interval.
+ * Thus, the ordered collection of timestamps are defined as a contiguous, equally-spaced point set
+ * {t1, t2, ..., tN} within the following interval:
+ *
+ *    [startTime, (count-1)*periodNanos]
+ *
+ * The timestamps {t1, t2, ..., tN} are then given by
+ *
+ *    t1 = startTime,
+ *    t2 = startTime + 1 * periodNanos,
+ *    t3 = startTime + 2 * periodNanos,
+ *    ...
+ *    tN = startTime + (N-1) * periodNanos,
+ *
+ * where N = count.
+ */
+message SamplingClock {
+  Timestamp startTime = 1; // Interval start time.
+  uint64 periodNanos = 2; // Period in nanos between samples.
+  uint32 count = 3; // Number of samples contained in the interval.
+}
+
+/*
+ * Specifies the set of timestamps for ingested data, either using an explicit list of timestamps, or a
+ * Sampling Clock specifying interval start time, sampling period, and sample count.
+ */
+message DataTimestamps {
+
+  oneof value {
+    SamplingClock samplingClock = 1;
+    TimestampList timestampList = 2;
+  }
+}
+
+
+//
+// ------------------- Common Result Definitions ---------------------------
+//
+
+/*
+ * Exceptional Method Result.
+ *
+ * Used to describe an exceptional result from a service method, such as a rejection or error handling request.
+ * This message is used by all service RPC methods to indicate a problem executing the method.
+ */
+message ExceptionalResult {
+
+  ExceptionalResultStatus exceptionalResultStatus = 1; // Enum indicating the type of exceptional result.
+  string message = 2; // Message with details about the exceptional result.
+
+  enum ExceptionalResultStatus {
+    RESULT_STATUS_REJECT = 0; // Indicates request was rejected during validation.
+    RESULT_STATUS_ERROR = 1; // Indicates an error was encountered in handling the request.
+    RESULT_STATUS_EMPTY = 2; // Indicates the query returned no data.
+    RESULT_STATUS_NOT_READY = 3; // Indicates an invalid bidirectional stream query cursor operation request.
+  }
+}
+
+
+// ------------------- Data Definitions (Ingestion and Query)  ---------------------------
+//
+
+/*
+ * Data Column
+ *
+ * Contains a named vector of heterogeneous data values sampled for a particular PV.
+ *
+ */
+message DataColumn {
+  string name = 1; // Name of PV.
+  repeated DataValue dataValues = 2; // List of heterogeneous column data values.
+}
+
+
+/*
+ * Unit of Heterogeneous Data
+ *
+ * The message includes both a data field 'value' and a status field 'valueStatus'.
+ * The 'value' field is the actual data value while the 'valueStatus' field represents the
+ * condition of the value (i.e., typically at acquisition time).  Future versions may include
+ * the status of the value within the archive (e.g., corrupt, truncated, etc.).
+ *
+ * The field 'value' is a union of all possible data types currently supported.  It represents one
+ * unit of heterogeneous data.  Only one data type may be included in the message.
+ *
+ * The 'valueStatus' field is structure defined as an enclosed RPC message.  It contains information about the
+ * value during acquisition, such as value alarm conditions, acquisition conditions, and any associated
+ * message.  This field is subject to future modification for expanded use cases.
+ */
+message DataValue {
+
+  /*
+   * Heterogeneous Data Value
+   */
+  oneof value {
+    string		stringValue = 1;		// character string
+    bool		booleanValue = 2;		// logical Boolean
+    uint32		uintValue = 3;			// unsigned integer value
+    uint64		ulongValue = 4;			// unsigned long integer
+    sint32		intValue = 5;			// signed integer value
+    sint64		longValue = 6;			// signed long integer
+    float		floatValue = 7;			// 32 byte float value
+    double		doubleValue = 8;		// 64 byte float value (double)
+    bytes		byteArrayValue = 9;		// raw data as byte string
+    Array		arrayValue = 10;			// heterogeneous array (no dimensional restrictions as of yet)
+    Structure	structureValue = 11;		// general data structure (no width or depth restrictions yet)
+    Image		imageValue = 12;		// general image value
+    Timestamp timestampValue = 13; // timestamp data value
+  }
+
+  /*
+   * Status of Value
+   *
+   * Represents the condition of the value or associated hardware and software at
+   * acquisition time.
+   */
+  ValueStatus valueStatus = 15;
+
+  /*
+   * Status of data value.
+   *
+   * The status definition reflects the value at acquisition time
+   * (e.g., as in the EPIC record fields).
+   */
+  message ValueStatus {
+
+    string message = 1;
+    StatusCode statusCode = 2;
+    Severity severity = 3;
+
+    /*
+     * Source of an Exceptional Status
+     */
+    enum StatusCode {
+      NO_STATUS = 0;		// no status condition
+      DEVICE_STATUS = 1;	// hardware device condition
+      DRIVER_STATUS = 2;	// hardware driver condition
+      RECORD_STATUS = 3;	// device database record condition
+      DB_STATUS = 4; 		// device database condition
+      CONF_STATUS = 5;		// configuration condition
+      UNDEFINED_STATUS = 6;	// unknown or undefined status condition
+      CLIENT_STATUS = 7;	// data provider client condition
+    }
+
+    /*
+     * Value Alarm
+     *
+     * Pre-configured alarm conditions triggered by current data value.
+     */
+    enum Severity {
+      NO_ALARM = 0;			// no alarm conditions
+      MINOR_ALARM = 1;		// value has triggered a minor alarm condition
+      MAJOR_ALARM = 2;		// value has triggered a major alarm condition
+      INVALID_ALARM = 3;	// value has triggered an invalid alarm condition
+      UNDEFINED_ALARM = 4;	// unknown or undefined alarm condition present
+    }
+  }
+}
+
+/*
+ * Structure Data Value.
+ *
+ * Represents a unit of data whose value is a structure.
+ *
+ * Each level of a data structure may have an indefinite number of fields consisting
+ * of (name, value) pairs.
+ *
+ * Note that the Structure message supports nested structure, and thus, complex data structures
+ * can be represented.  The 'value' field within a (name, value) pair may contain another Structure
+ * message supporting multi-level structuring.  The depth of the structuring is currently indefinite
+ * but may have practical restrictions within service implementation (yet unreported).
+ */
+message Structure {
+
+  repeated Field fields = 1;
+
+  message Field {
+    string name = 1;
+    DataValue value = 2;
+  }
+}
+
+/*
+ * Array Data Value.
+ *
+ * Represents a unit of data whose value is an array.
+ *
+ * Used for vectors whose values are arrays instead of individual scalar values.  Data values are any of the defined
+ * DataValue types including simple scalars as well as more complex types like structures, images, and other nested
+ * arrays.  The depth of array nesting is currently indefinite but may have practical restrictions within service
+ * implementation (yet unreported).
+ */
+message Array {
+  repeated DataValue dataValues = 1; // List of array data values.
+}
+
+/*
+ * Image Data Value.
+ *
+ * Represents a unit of data whose value is an image file.
+ *
+ * Images are stored as raw data as a byte vector.  Interpretation is determined by standard
+ * image file formats enumerated by FileType.
+ */
+message Image {
+
+  bytes image = 1;
+  FileType fileType = 2;
+
+  /*
+   * Image file format.  Also used as file extension.
+   */
+  enum FileType {
+    RAW = 0;
+    JPEG = 1;
+    GIF = 2;
+    TIFF = 3;
+    BMP = 4;
+    PNG = 5;
+    EPS = 6;
+    SVG = 7;
+    PDF = 8;
+  }
+}

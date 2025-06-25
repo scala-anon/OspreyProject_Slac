@@ -9,7 +9,7 @@ set(CMAKE_CXX_STANDARD 17)
 #
 # apt install libprotobuf-dev libgrpc++-dev protobuf-compiler-grpc
 find_package(Protobuf REQUIRED)
-find_package(gRPC REQUIRED)
+#find_package(gRPC REQUIRED)
 
 add_subdirectory(proto)
 add_subdirectory(client)

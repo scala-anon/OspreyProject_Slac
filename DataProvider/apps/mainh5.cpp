@@ -1,6 +1,6 @@
 #include "ingest_client.hpp"
 #include "PacketParser.h"
-#include "HDF5/HDF5_Parser.hpp"
+#include "h5_parser.hpp"
 #include <chrono>
 #include <iostream>
 

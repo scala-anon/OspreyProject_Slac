@@ -31,3 +31,10 @@ Thumbs.db
 logs/
 data/
 
+# Data Platform specific (merged from data-platform/.gitignore)
+dp-support/current
+dp-support/dp-support*
+lib/dp-service/*.jar
+var/log/*.log
+var/lock/*.pid
+data-platform.iml

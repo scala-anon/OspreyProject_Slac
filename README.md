@@ -18,29 +18,50 @@ This repository provides a modular C++ client for integrating with the Osprey Ma
 ## 📁 Directory Structure
 
 ```text
-OspreyProject/
-├── client/                    # Client-side source logic
-│   ├── CMakeLists.txt         # Client-specific build file
-│   └── src/
-│       ├── main.cpp               # Application entry point
-│       ├── ingest_client.cpp      # Ingestion RPC client
-│       ├── annotate_client.cpp    # Annotation RPC client
-│       ├── query_client.cpp       # Query RPC client
-│       ├── ingest_client.hpp      # Client interface header
-│       ├── PacketParser.cpp       # Binary .dat file parser
-│       └── PacketParser.h         # Parser header
+OspreyProject_Slac/
+├── .gitignore                    # Git ignore patterns
+├── README.md                     # Main project documentation
 │
-├── proto/                    # Protobuf and gRPC interface definitions
-│   ├── CMakeLists.txt        # Proto-specific CMake config
-│   ├── common.proto          # Shared types (timestamps, data, etc.)
-│   └── ingestion.proto       # Ingestion service interface
+├── .github/                      # GitHub Actions workflows
+│   └── workflows/
+│       └── build.yml             # CI/CD build configuration
 │
-├── build/  (🛑 ignored)       # CMake build output — excluded via .gitignore
-│   └── ...                   # Compiled binaries, objects, and generated files
-│
-├── CMakeLists.txt            # Top-level CMake configuration
-├── README.md                 # Project documentation
-└── .gitignore                # Excludes build/ and other local artifacts
+├── DataProvider/                 # 🎯 Backend stub creator for MLDP
+│   ├── CMakeLists.txt            # DataProvider build configuration
+│   │
+│   ├── include/                  # Header files
+│   │   ├── annotation_client.hpp # Annotation client interface
+│   │   ├── h5_parser.hpp         # H5 file parser interface
+│   │   ├── ingest_client.hpp     # MLDP ingestion client interface
+│   │   ├── PacketParser.h        # Packet parser interface
+│   │   └── query_client.hpp      # Query client interface
+│   │
+│   ├── src/                      # Source implementations
+│   │   ├── annotate_client.cpp   # Annotation client implementation
+│   │   ├── h5_parser.cpp         # H5 file parser implementation
+│   │   ├── ingest_client.cpp     # MLDP ingestion client implementation
+│   │   ├── PacketParser.cpp      # Packet parser implementation
+│   │   └── query_client.cpp      # Query client implementation
+│   │
+│   ├── apps/                     # Main executable programs
+│   │   └── mainh5.cpp            # H5 data processor main program
+│   │
+│   ├── scripts/                   # MLDP integration scripts
+│   │   └── [stub creator scripts] # Scripts for MLDP to call
+│   │
+│   ├── config/                   # Configuration files
+│   │   └── [configuration files] # Settings for different data types
+│   │
+│   ├── proto/                    # Protocol buffer definitions
+│   │   ├── CMakeLists.txt        # Proto build configuration
+│   │   ├── common.proto          # Shared protobuf types
+│   │   └── ingestion.proto       # Ingestion service definitions
+│   │
+│   ├── old_cmake_for_ref/        # Reference materials
+│   │   └── CMakeLists.txt        # Old CMake for reference
+│   │
+│   └── build/ (🛑 ignored)       # Build output directory
+├── data-platform/ (🛑 ignored)   # 📚 MLDP platform documentation & tools
 ```
 ---
 
@@ -82,3 +103,9 @@ cmake ..
 ```bash
 make -j$(nproc)
 ```
+
+# Setting up data-platform
+```text
+Follow this link and follow the quick install method in main directory of this project
+```
+[MLDP Data Platform](https://github.com/osprey-dcs/data-platform)

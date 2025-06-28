@@ -20,7 +20,7 @@ using RegisterProviderResponse = dp::service::ingestion::RegisterProviderRespons
 class OspreyClient {
 public:
     explicit OspreyClient(const std::string& server_address);
-    RegisterProviderResponse sendRegisterProvider(const RegisterProviderRequest& request);
+     RegisterProviderResponse sendRegisterProvider(const RegisterProviderRequest& request);
     std::string ingestData(const IngestDataRequest& request);
 
 private:

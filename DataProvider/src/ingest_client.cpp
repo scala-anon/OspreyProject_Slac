@@ -4,9 +4,17 @@
 #include <iostream>
 
 // --- OspreyClient Implementation ---
-OspreyClient::OspreyClient(const std::string& server_address)
-    : stub_(dp::service::ingestion::DpIngestionService::NewStub(
-        grpc::CreateChannel(server_address, grpc::InsecureChannelCredentials()))) {}
+OspreyClient::OspreyClient(const std::string& server_address) {
+    auto channel = grpc::CreateChannel(server_address, grpc::InsecureChannelCredentials());
+
+    // Block until the channel is ready
+    if (!channel->WaitForConnected(std::chrono::system_clock::now() + std::chrono::seconds(5))) {
+        std::cerr << "Failed to connect to MLDP server at " << server_address << std::endl;
+        throw std::runtime_error("gRPC channel connection timeout");
+    }
+
+    stub_ = dp::service::ingestion::DpIngestionService::NewStub(channel);
+}
 
 dp::service::ingestion::RegisterProviderResponse
 OspreyClient::sendRegisterProvider(const RegisterProviderRequest& request) {

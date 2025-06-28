@@ -127,7 +127,7 @@ int main(int argc, char* argv[]) {
     
     // Step 2: Connect to MLDP and register
     std::cout << "\n--- Step 2: Connecting to MLDP ---" << std::endl;
-    std::string server_address = "localhost:50051"; //TODO change later once mldp runs on ssh 
+    std::string server_address = "127.0.0.1:50051"; //TODO change later once mldp runs on ssh 
     OspreyClient client(server_address);
     
     try {

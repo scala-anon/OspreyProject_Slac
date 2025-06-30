@@ -38,3 +38,4 @@ lib/dp-service/*.jar
 var/log/*.log
 var/lock/*.pid
 data-platform.iml
+data-platform/

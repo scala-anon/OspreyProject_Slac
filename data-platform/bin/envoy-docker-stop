@@ -1,9 +1,0 @@
-#/bin/bash
-
-echo
-echo '================================================================'
-echo 'envoy-docker-stop'
-echo '================================================================'
-echo
-
-docker stop envoy || { echo "fatal error: failed to stop envoy docker container"; exit 1; }

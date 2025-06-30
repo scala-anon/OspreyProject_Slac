@@ -1,0 +1,67 @@
+2025-06-27 17:12:00.020 [main] INFO  com.ospreydcs.dp.service.ingest.server.IngestionGrpcServer - initService_ using handler: com.ospreydcs.dp.service.ingest.handler.mongo.MongoIngestionHandler
+2025-06-27 17:12:00.033 [main] INFO  com.ospreydcs.dp.service.common.config.ConfigurationManager - initialize using command line config file override: /sdf/group/cds/sw/epics/users/mamais/OspreyProject_Slac/data-platform/config/dp.yml
+2025-06-27 17:12:00.072 [main] INFO  com.ospreydcs.dp.service.common.config.ConfigurationManager - initialize dp configuration: {MongoClient.dbHost=localhost, MongoClient.dbPort=27017, MongoClient.dbUser=admin, MongoClient.dbPassword=admin, GrpcClient.hostname=localhost, GrpcServer.incomingMessageSizeLimitBytes=4096000, IngestionServer.port=50051, IngestionHandler.numWorkers=7, IngestionBenchmark.grpcConnectString=localhost:50051, IngestionBenchmark.startSeconds=1698767462, QueryServer.port=50052, QueryHandler.numWorkers=7, QueryHandler.outgoingMessageSizeLimitBytes=4096000, QueryBenchmark.grpcConnectString=localhost:50052, AnnotationServer.port=50053, AnnotationHandler.numWorkers=7, Export.serverMountPoint=/tmp, Export.shareMountPoint=, Export.urlBase=http://localhost:8081, Export.tabularExportFileSizeLimitBytes=4096000}
+2025-06-27 17:12:00.076 [main] INFO  com.ospreydcs.dp.service.common.mongo.MongoClientBase - mongo client init connectString: mongodb://admin:admin@localhost:27017/ databaseName: dp
+2025-06-27 17:12:00.076 [main] INFO  com.ospreydcs.dp.service.common.mongo.MongoClientBase - mongo client init collection names annotations: annotations buckets: buckets calculations: calculations datasets: dataSets providers: providers requestStatus: requestStatus
+2025-06-27 17:12:00.698 [main] INFO  com.ospreydcs.dp.service.common.handler.QueueHandlerBase - init numWorkers: 7
+2025-06-27 17:12:01.071 [main] INFO  com.ospreydcs.dp.service.common.server.GrpcServerBase - Server started, listening on 50051
+Jun 27, 2025 5:53:44 PM io.grpc.netty.NettyServerTransport notifyTerminated
+INFO: Transport failed
+io.netty.handler.codec.http2.Http2Exception: HTTP/2 client preface string missing or corrupt. Hex dump for received bytes: 0d0a
+	at io.netty.handler.codec.http2.Http2Exception.connectionError(Http2Exception.java:109)
+	at io.netty.handler.codec.http2.Http2ConnectionHandler$PrefaceDecoder.readClientPrefaceString(Http2ConnectionHandler.java:321)
+	at io.netty.handler.codec.http2.Http2ConnectionHandler$PrefaceDecoder.decode(Http2ConnectionHandler.java:247)
+	at io.netty.handler.codec.http2.Http2ConnectionHandler.decode(Http2ConnectionHandler.java:453)
+	at io.netty.handler.codec.ByteToMessageDecoder.decodeRemovalReentryProtection(ByteToMessageDecoder.java:529)
+	at io.netty.handler.codec.ByteToMessageDecoder.callDecode(ByteToMessageDecoder.java:468)
+	at io.netty.handler.codec.ByteToMessageDecoder.channelRead(ByteToMessageDecoder.java:290)
+	at io.netty.channel.AbstractChannelHandlerContext.invokeChannelRead(AbstractChannelHandlerContext.java:444)
+	at io.netty.channel.AbstractChannelHandlerContext.invokeChannelRead(AbstractChannelHandlerContext.java:420)
+	at io.netty.channel.AbstractChannelHandlerContext.fireChannelRead(AbstractChannelHandlerContext.java:412)
+	at io.netty.channel.DefaultChannelPipeline$HeadContext.channelRead(DefaultChannelPipeline.java:1410)
+	at io.netty.channel.AbstractChannelHandlerContext.invokeChannelRead(AbstractChannelHandlerContext.java:440)
+	at io.netty.channel.AbstractChannelHandlerContext.invokeChannelRead(AbstractChannelHandlerContext.java:420)
+	at io.netty.channel.DefaultChannelPipeline.fireChannelRead(DefaultChannelPipeline.java:919)
+	at io.netty.channel.nio.AbstractNioByteChannel$NioByteUnsafe.read(AbstractNioByteChannel.java:166)
+	at io.netty.channel.nio.NioEventLoop.processSelectedKey(NioEventLoop.java:788)
+	at io.netty.channel.nio.NioEventLoop.processSelectedKeysOptimized(NioEventLoop.java:724)
+	at io.netty.channel.nio.NioEventLoop.processSelectedKeys(NioEventLoop.java:650)
+	at io.netty.channel.nio.NioEventLoop.run(NioEventLoop.java:562)
+	at io.netty.util.concurrent.SingleThreadEventExecutor$4.run(SingleThreadEventExecutor.java:997)
+	at io.netty.util.internal.ThreadExecutorMap$2.run(ThreadExecutorMap.java:74)
+	at io.netty.util.concurrent.FastThreadLocalRunnable.run(FastThreadLocalRunnable.java:30)
+	at java.base/java.lang.Thread.run(Thread.java:1575)
+
+2025-06-27 18:12:27.828 [grpc-default-executor-0] INFO  com.ospreydcs.dp.service.ingest.service.IngestionServiceImpl - id: 1060511813 registerProvider request received, provider: H5_DataProvider
+Jun 27, 2025 6:15:28 PM io.grpc.netty.NettyServerTransport notifyTerminated
+INFO: Transport failed
+io.netty.handler.codec.http2.Http2Exception: Unexpected HTTP/1.x request: GET / 
+	at io.netty.handler.codec.http2.Http2Exception.connectionError(Http2Exception.java:109)
+	at io.netty.handler.codec.http2.Http2ConnectionHandler$PrefaceDecoder.readClientPrefaceString(Http2ConnectionHandler.java:317)
+	at io.netty.handler.codec.http2.Http2ConnectionHandler$PrefaceDecoder.decode(Http2ConnectionHandler.java:247)
+	at io.netty.handler.codec.http2.Http2ConnectionHandler.decode(Http2ConnectionHandler.java:453)
+	at io.netty.handler.codec.ByteToMessageDecoder.decodeRemovalReentryProtection(ByteToMessageDecoder.java:529)
+	at io.netty.handler.codec.ByteToMessageDecoder.callDecode(ByteToMessageDecoder.java:468)
+	at io.netty.handler.codec.ByteToMessageDecoder.channelRead(ByteToMessageDecoder.java:290)
+	at io.netty.channel.AbstractChannelHandlerContext.invokeChannelRead(AbstractChannelHandlerContext.java:444)
+	at io.netty.channel.AbstractChannelHandlerContext.invokeChannelRead(AbstractChannelHandlerContext.java:420)
+	at io.netty.channel.AbstractChannelHandlerContext.fireChannelRead(AbstractChannelHandlerContext.java:412)
+	at io.netty.channel.DefaultChannelPipeline$HeadContext.channelRead(DefaultChannelPipeline.java:1410)
+	at io.netty.channel.AbstractChannelHandlerContext.invokeChannelRead(AbstractChannelHandlerContext.java:440)
+	at io.netty.channel.AbstractChannelHandlerContext.invokeChannelRead(AbstractChannelHandlerContext.java:420)
+	at io.netty.channel.DefaultChannelPipeline.fireChannelRead(DefaultChannelPipeline.java:919)
+	at io.netty.channel.nio.AbstractNioByteChannel$NioByteUnsafe.read(AbstractNioByteChannel.java:166)
+	at io.netty.channel.nio.NioEventLoop.processSelectedKey(NioEventLoop.java:788)
+	at io.netty.channel.nio.NioEventLoop.processSelectedKeysOptimized(NioEventLoop.java:724)
+	at io.netty.channel.nio.NioEventLoop.processSelectedKeys(NioEventLoop.java:650)
+	at io.netty.channel.nio.NioEventLoop.run(NioEventLoop.java:562)
+	at io.netty.util.concurrent.SingleThreadEventExecutor$4.run(SingleThreadEventExecutor.java:997)
+	at io.netty.util.internal.ThreadExecutorMap$2.run(ThreadExecutorMap.java:74)
+	at io.netty.util.concurrent.FastThreadLocalRunnable.run(FastThreadLocalRunnable.java:30)
+	at java.base/java.lang.Thread.run(Thread.java:1575)
+
+2025-06-27 18:20:48.570 [grpc-default-executor-1] INFO  com.ospreydcs.dp.service.ingest.service.IngestionServiceImpl - id: 356396672 registerProvider request received, provider: H5_DataProvider
+2025-06-30 12:33:24.327 [grpc-default-executor-2] INFO  com.ospreydcs.dp.service.ingest.service.IngestionServiceImpl - id: 2081620724 registerProvider request received, provider: H5_DataProvider_Streaming
+2025-06-30 12:35:35.390 [grpc-default-executor-3] INFO  com.ospreydcs.dp.service.ingest.service.IngestionServiceImpl - id: 2062662480 registerProvider request received, provider: H5_DataProvider_Streaming
+2025-06-30 12:42:41.203 [grpc-default-executor-4] INFO  com.ospreydcs.dp.service.ingest.service.IngestionServiceImpl - id: 472808697 registerProvider request received, provider: H5_DataProvider_Streaming
+2025-06-30 12:48:19.716 [grpc-default-executor-5] INFO  com.ospreydcs.dp.service.ingest.service.IngestionServiceImpl - id: 1081939150 registerProvider request received, provider: H5_DataProvider_Streaming

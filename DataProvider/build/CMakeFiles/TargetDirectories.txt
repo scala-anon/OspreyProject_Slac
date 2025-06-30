@@ -1,0 +1,14 @@
+/sdf/group/cds/sw/epics/users/mamais/OspreyProject_Slac/DataProvider/build/CMakeFiles/mainh5.dir
+/sdf/group/cds/sw/epics/users/mamais/OspreyProject_Slac/DataProvider/build/CMakeFiles/edit_cache.dir
+/sdf/group/cds/sw/epics/users/mamais/OspreyProject_Slac/DataProvider/build/CMakeFiles/rebuild_cache.dir
+/sdf/group/cds/sw/epics/users/mamais/OspreyProject_Slac/DataProvider/build/CMakeFiles/list_install_components.dir
+/sdf/group/cds/sw/epics/users/mamais/OspreyProject_Slac/DataProvider/build/CMakeFiles/install.dir
+/sdf/group/cds/sw/epics/users/mamais/OspreyProject_Slac/DataProvider/build/CMakeFiles/install/local.dir
+/sdf/group/cds/sw/epics/users/mamais/OspreyProject_Slac/DataProvider/build/CMakeFiles/install/strip.dir
+/sdf/group/cds/sw/epics/users/mamais/OspreyProject_Slac/DataProvider/build/proto/CMakeFiles/myproto.dir
+/sdf/group/cds/sw/epics/users/mamais/OspreyProject_Slac/DataProvider/build/proto/CMakeFiles/edit_cache.dir
+/sdf/group/cds/sw/epics/users/mamais/OspreyProject_Slac/DataProvider/build/proto/CMakeFiles/rebuild_cache.dir
+/sdf/group/cds/sw/epics/users/mamais/OspreyProject_Slac/DataProvider/build/proto/CMakeFiles/list_install_components.dir
+/sdf/group/cds/sw/epics/users/mamais/OspreyProject_Slac/DataProvider/build/proto/CMakeFiles/install.dir
+/sdf/group/cds/sw/epics/users/mamais/OspreyProject_Slac/DataProvider/build/proto/CMakeFiles/install/local.dir
+/sdf/group/cds/sw/epics/users/mamais/OspreyProject_Slac/DataProvider/build/proto/CMakeFiles/install/strip.dir

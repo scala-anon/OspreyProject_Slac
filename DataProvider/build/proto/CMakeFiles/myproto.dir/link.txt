@@ -1,0 +1,2 @@
+/usr/bin/ar qc libmyproto.a CMakeFiles/myproto.dir/common.pb.cc.o CMakeFiles/myproto.dir/ingestion.pb.cc.o CMakeFiles/myproto.dir/common.grpc.pb.cc.o CMakeFiles/myproto.dir/ingestion.grpc.pb.cc.o
+/usr/bin/ranlib libmyproto.a

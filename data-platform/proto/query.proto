@@ -1,0 +1,519 @@
+//
+// query.proto
+//
+// Contains RPC messages and interface specific to the Query Service.
+
+syntax = "proto3";
+
+package dp.service.query;
+
+option java_multiple_files = true;
+option java_package = "com.ospreydcs.dp.grpc.v1.query";
+
+import "common.proto";
+
+
+//
+// ------------------- RPC Interfaces ---------------------------
+//
+
+/*
+ * The Query Service Interface
+ *
+ * Defines RPC operations for data and metadata queries.
+ */
+service DpQueryService {
+
+  /*
+   * queryData: Unary (non-streaming) time series data query.
+   *
+   * Client sends a single QueryDataRequest with the query parameters, and receives a single QueryDataResponse with the
+   * query results. The response may indicate rejection, error in handling, no data matching query, or otherwise
+   * contains the data matching the query specification.
+   */
+  rpc queryData(QueryDataRequest) returns (QueryDataResponse);
+
+  /*
+   * queryDataStream: Server-side streaming time series data query.
+   *
+   * Client sends a single QueryDataRequest with the query parameters, and receives a stream of QueryDataResponse
+   * messages with the query results. The response may indicate rejection, error in handling, no data matching query,
+   * or otherwise contains the data matching the query specification.  Results are sent in the response stream until
+   * the MongoDB cursor for the query is exhausted, or an error is encountered in processing.
+   *
+   * The response stream is closed by the server in case of rejection, if there is an error in processing, or the
+   * result cursor is exhausted.
+   *
+   * We expect this to be the best performing RPC for time series data query.
+   */
+  rpc queryDataStream(QueryDataRequest) returns (stream QueryDataResponse);
+
+  /*
+   * queryDataBidiStream: Bidirectional streaming time series data query.
+   *
+   * Client sends a QueryDataRequest with the query parameters, and receives an initial QueryDataResponse message
+   * with the query results.
+   *
+   * While the MongoDB cursor for the query result contains additional details, the client sends a QueryDataRequest
+   * message with a CursorOperation payload to receive the next QueryDataResponse message in the stream.  This should
+   * continue in a loop until the query result is exhausted.
+   *
+   * The server closes the response stream if a request is rejected, or when the result is exhausted or an error
+   * is encountered.
+   *
+   * Each individual response may indicate rejection, error in handling, no data matching query, or otherwise
+   * contains the data matching the query specification.
+   */
+  rpc queryDataBidiStream(stream QueryDataRequest) returns (stream QueryDataResponse);
+
+  /*
+   * queryTable: Unary (non-streaming) time series data query with tabular result.
+   *
+   * This time series data query returns its result in a tabular format, for use by the Data Platform web application.
+   * The client sends a single QueryTableRequest with the query parameters and receives a single QueryTableResponse.
+   * The response content may indicate an exception in handling such as rejection, database error, no data matching
+   * query, or otherwise contains the tabular data matching the query specification.
+   */
+  rpc queryTable(QueryTableRequest) returns (QueryTableResponse);
+
+  /*
+   * queryPvMetadata(): Unary (non-streaming) metadata query.
+   *
+   * This RPC is used by clients to learn about data sources (PVs/columns) available in the archive.  Client sends
+   * a single QueryPvMetadataRequest with the query parameters, and receives a single QueryPvMetadataResponse
+   * with the query results. The response may indicate rejection, error in handling, no data matching query, or
+   * otherwise contains the data matching the query specification.
+   */
+  rpc queryPvMetadata(QueryPvMetadataRequest) returns (QueryPvMetadataResponse);
+
+  /*
+   * queryProviders(): Unary Providers query.
+   *
+   * This rpc is used by clients to retrieve details about ingestion data Providers defined in the archive.
+   * It accepts a single "QueryProvidersRequest" containing the query parameters and returns a single
+   * "QueryProvidersResponse".  The response may indicate an exceptional result such as rejection or error in handling
+   * the request, otherwise it contains information about each Provider matching the query criteria.
+   */
+  rpc queryProviders(QueryProvidersRequest) returns (QueryProvidersResponse);
+
+  /*
+   * queryProviderMetadata(): Unary Provider metadata query.
+   *
+   * This rpc is used by clients to retrieve ingestion statistics for data Providers defined in the archive.
+   * It accepts a single "QueryProviderMetadataRequest" message containing the query parameters, and returns a single
+   * "QueryProviderMetadataResponse".  The response may indicate an exceptional result such as rejection or error in
+   * handling the request, otherwise it contains ingestion metadata for the specified data provider.
+   */
+  rpc queryProviderMetadata(QueryProviderMetadataRequest) returns (QueryProviderMetadataResponse);
+
+}
+
+
+//
+// ------------------- Time Series Data Query ---------------------------
+//
+
+/*
+ * Time Series Data Query Request.
+ *
+ * Describes the parameters for a time series data query. A QueryDataRequest contains either a QuerySpec or
+ * a CursorOperation.
+ *
+ * The QuerySpec is used as the initial request message payload for all time-series data queries.  It includes a
+ * time range and a list of PV names.
+ *
+ * The only rpc method that supports use of a CursorOperation payload is queryDataBidiStream().  This method allows
+ * the client to control the flow of the query response stream.  After receiving the initial query response message,
+ * the client sends a CURSOR_OP_NEXT CursorOperation to retrieve each subsequent query response message until the
+ * the query result response stream is exhausted.
+ */
+message QueryDataRequest {
+
+  // request: Payload for initial request to all time series data queries is QuerySpec defining query paramters.
+  // CursorOperation payload is used only for queryDataBidiStream() RPC to retrieve additional results after initial response.
+  oneof request {
+    QuerySpec querySpec = 1;
+    CursorOperation cursorOp = 2;
+  }
+
+  /*
+   * Time Series Data Query Spec
+   *
+   * Payload used to specify query parameters for all time series data query RPC methods.
+   */
+  message QuerySpec {
+    Timestamp beginTime = 1; // Required, specifies query start time.
+    Timestamp endTime = 2; // Required, specifies query end time.
+    repeated string pvNames = 3; // Required, contains list of PV names to query for specified time range.
+    bool useSerializedDataColumns = 4; // Required, specifies if the result should use SerializedDataColumns for maximum performance.
+  }
+
+  /*
+   * Cursor Operation used as payload in subsequent requests in queryDataBidiStream() after initial request containing
+   * QuerySpec to request additional results beyond initial response.
+   */
+  message CursorOperation {
+    CursorOperationType cursorOperationType = 1;
+
+    enum CursorOperationType {
+      CURSOR_OP_NEXT = 0; // Specifies that the next query response message should be sent.
+    }
+  }
+}
+
+/*
+ * QueryDataResponse
+ *
+ * Contains results from a time-series data query.  Sent as single response to unary method queryData(),
+ * or in the response streams from queryDataStream() and queryDataBidiStream().
+
+ * Contains either ExceptionalResult indicating a problem handling the request, or QueryData
+ * containing the data returned by the query.  An ExceptionalResult is sent if the query is determined to be invalid
+ * or there is an error executing the query. Otherwise a QueryData payload is sent containing the data returned
+ * by the query.
+ */
+message QueryDataResponse {
+
+  Timestamp responseTime = 1; // Indicates time response was generated.
+
+  // result: Response contains either an ExceptionalResult indicating a problem handling the request,
+  // or QueryData with query result.
+  oneof result {
+    ExceptionalResult exceptionalResult = 10;
+    QueryData queryData = 11;
+  }
+
+  /*
+   * QueryData
+   *
+   * Contains the data for a time series data query result, as a list of DataBucket objects. Each DataBucket minimally
+   * includes a vector of PV data values (in a DataColumn) and a DataTimestamps object specifying the timestamps
+   * for the data vector values using either a SamplingClock (with start time, sample period, and number of samples or
+   * an explicit list of timestamps) or a TimestampsList (with an explicit list of timestamps). The DataBucket also
+   * includes key/value Attributes and/or EventMetadata if defined for the data in ingestion.
+   *
+   * By default, each DataBucket contains a regular DataColumn object with the vector of data for the bucket.
+   * if the useSerializedDataColumns flag is set in the QueryDataRequest's QuerySpec, each DataBucket in the result
+   * contains a SerializedDataColumn that contains a byte data representation of the corresponding DataColumn object.
+   * Clients seeking maximum query performance should use SerializedDataColumns in the query result in order to avoid
+   * extra serialization operations performed by the gRPC communication framework.
+   */
+  message QueryData {
+
+    repeated DataBucket dataBuckets = 1;
+
+    message DataBucket {
+      DataTimestamps dataTimestamps = 1; // Specifies timestamps for bucket, using SamplingClock or explicit Timestamp list.
+      repeated string tags = 2; // Specifies list of tags for bucket, if any.
+      repeated Attribute attributes = 3; // Specifies list of key/value attributes for bucket, if any.
+      EventMetadata eventMetadata = 4; // Specifies event metadata for bucket, if any.
+      oneof data {
+        DataColumn dataColumn = 10; // Vector of data values corresponding to data timestamps.
+        SerializedDataColumn serializedDataColumn = 11; // Serialized DataColumn byte data to avoid redundant serialization ops.
+      }
+    }
+  }
+}
+
+/*
+ * Time Series Data Query With Tabular Result Format.
+ *
+ * Describes the parameters for a time series data query that returns data in a tabular format.  The TableResultFormat
+ * enum is used to specify either row-oriented or column-oriented tabular result format.  Time range must be specified
+ * using begin/endTime fields.  PV names are specified using either an explicit pvNameList or a pvNamePattern
+ * matched by regex.
+ */
+message QueryTableRequest {
+
+  TableResultFormat format = 1; // Required, specifies table result format.
+  Timestamp beginTime = 2; // Required, specifies query start time.
+  Timestamp endTime = 3; // Required, specifies query end time.
+
+  // pvNameSpec: Required, contains either a list of column/PV names (PvNameList),
+  // or a single regex pattern string (PvNamePattern).
+  oneof pvNameSpec {
+    PvNameList pvNameList = 11;
+    PvNamePattern pvNamePattern = 12;
+  }
+
+  enum TableResultFormat {
+    TABLE_FORMAT_ROW_MAP = 0; // return row oriented data using map structure (default value if not explicitly set)
+    TABLE_FORMAT_COLUMN = 1; // return column oriented data using DataColumns
+  }
+}
+
+/*
+ * Tabular Time Series Data Query Response.
+ *
+ * Contains results from a time series data query in a tabular format for use by the DP web application
+ * (and other similar uses.
+ *
+ * Response message payload is either an ExceptionalResult or TableResult. An ExceptionalResult message is sent if
+ * the request is rejected because it is deemed to be invalid, there is an error processing the query,
+ * or the query returned no data. Otherwise, a TableResult message is sent contiaing the query results.
+ *
+ * The TableResult contains a ColumnTable if the request format is specified to be TABLE_FORMAT_COLUMN,
+ * or a RowMapTable if format is TABLE_FORMAT_ROW_MAP.
+ */
+message QueryTableResponse {
+
+  Timestamp responseTime = 1; // Indicates time response was generated.
+
+  // result: Response contains either an ExceptionalResult indicating a problem handling the request,
+  // or TableResult with query result.
+  oneof result {
+    ExceptionalResult exceptionalResult = 10;
+    TableResult tableResult = 11;
+  }
+
+  /*
+   * Tabular Time Series Query Result Content.
+   *
+   * Contains the data for a time series data query result, in a tabular format.
+   */
+  message TableResult {
+    oneof tableResult {
+      ColumnTable columnTable = 1;
+      RowMapTable rowMapTable = 2;
+    }
+  }
+
+  /*
+   * Column-oriented table result with list of columns.
+   */
+  message ColumnTable {
+    DataTimestamps dataTimestamps = 1; // Specifies the timestamps for the table, using an explicit list of times.
+    repeated DataColumn dataColumns = 2; // Contains a list of columns, each with a name and vector of values one for each timestamp.
+  }
+
+  /*
+   * Row-oriented table result where each row is a map whose keys are the column names and values are the column values
+   * for that row.
+   */
+  message RowMapTable {
+    repeated string columnNames = 1;
+    repeated DataRow rows = 2;
+    message DataRow {
+      map<string, DataValue> columnValues = 1;
+    }
+  }
+}
+
+
+//
+// ------------------- Metadata Query ---------------------------
+//
+
+/*
+ * QueryPvMetadataRequest
+ *
+ * Describes the parameters for querying metadata for PVs managed in the archive.
+ *
+ * A request may contain one of two payloads, either a PvNameList with an explicit list of
+ * column/PV names, or a PvNamePattern with a regular expression pattern used to match against column/PV names.
+ */
+message QueryPvMetadataRequest {
+
+  // pvNameSpec: Contains either a list of column/PV names, or a single regex pattern string.
+  oneof pvNameSpec {
+    PvNameList pvNameList = 1;
+    PvNamePattern pvNamePattern = 2;
+  }
+
+}
+
+/*
+ * QueryPvMetadataResponse
+ *
+ * Contains results from a PV metadata query. Payload is an ExceptionalResult if a rejection, error, or empty query
+ * result is encountered, otherwise is a MetadataResult containing results of query.
+ */
+message QueryPvMetadataResponse {
+
+  Timestamp responseTime = 1; // Indicates time response was generated.
+
+  // result: Response contains either an ExceptionalResult indicating a problem handling the request,
+  // or MetadataResult with query result.
+  oneof result {
+    ExceptionalResult exceptionalResult = 10;
+    MetadataResult metadataResult = 11;
+  }
+
+  /*
+   * MetadataResult
+   *
+   * Contains a list of PvInfo metadata objects, one for each column/PV name matching the query specification.
+   */
+  message MetadataResult {
+
+    repeated PvInfo pvInfos = 1; // List of metadata objects matching query specificiation.
+
+    message PvInfo {
+      string pvName = 1; // Name of PV.
+      string lastBucketId = 2; // Database identifier for PV's most recent bucket.
+      int32 lastBucketDataTypeCase = 3; // Data type case (DataValue.ValueCase) for PV's most recent bucket.
+      string lastBucketDataType = 4; // Data type name of PV's most recent bucket.
+      int32 lastBucketDataTimestampsCase = 5; // DataTimestamps case for PV's most recent bucket.
+      string lastBucketDataTimestampsType = 6; // DataTimestamps name for PV's most recent bucket.
+      uint32 lastBucketSampleCount = 8; // Number of samples in PV's most recent bucket.
+      uint64 lastBucketSamplePeriod = 9; // Sample period in nanos for PV's most recent bucket (zero if DataTimestamps is TimestampList).
+      Timestamp firstDataTimestamp = 10; // Timestamp of first data value for PV.
+      Timestamp lastDataTimestamp = 11; // Timestamp of most recent data value for PV.
+      int32 numBuckets = 12; // Number of buckets for this PV.
+    }
+  }
+}
+
+message PvNameList {
+  repeated string pvNames = 1; // Specifies list of column/PV names to match and return metadata for.
+}
+
+message PvNamePattern {
+  string pattern = 1; // Specifies regex pattern to use for matching column/PV names to return metadata for.
+}
+
+
+//
+// ------------------- Providers Query ---------------------------
+//
+
+/*
+ * QueryProvidersRequest.
+ *
+ * Contains a list of criteria for querying Providers. List can include a single criterion,
+ * or multiple criteria for a compound query.  For example, query might include both a TagsCriterion and
+ * AttributesCriterion to specify a query over both the tags and attributes fields, respectively.
+ */
+message QueryProvidersRequest {
+
+  repeated Criterion criteria = 1;
+
+  message Criterion {
+
+    oneof criterion {
+      IdCriterion idCriterion = 10; // Query by provider id.
+      TextCriterion textCriterion = 14; // Full text search over provider name and description fields.
+      TagsCriterion tagsCriterion = 15; // Query by tag value.
+      AttributesCriterion attributesCriterion = 16; // Query by attribute key and value.
+    }
+
+    /*
+     * Criterion used to query Providers by id.
+     */
+    message IdCriterion {
+      string id = 1;
+    }
+
+    /*
+     * Criterion used to query Providers by text contained in the name and description fields.
+     */
+    message TextCriterion {
+      string text = 1;
+    }
+
+    /*
+     * Criterion used to query Providers by tag value.
+     */
+    message TagsCriterion {
+      string tagValue = 1;
+    }
+
+    /*
+     * Criterion used to query Providers by attribute key and value.
+     */
+    message AttributesCriterion {
+      string key = 1;
+      string value = 2;
+    }
+  }
+}
+
+/*
+ * QueryProvidersResponse
+ *
+ * Contains results from a queryProviders() API method request.  Message payload is either an ExceptionalResult
+ * indicating rejection or an error handling the request, or a ProvidersResult with a ProviderInfo entry for each
+ * Provider matching the query criteria.
+ */
+message QueryProvidersResponse {
+
+  Timestamp responseTime = 1; // Indicates time response was generated.
+
+  // result: Response contains either an ExceptionalResult indicating a problem handling the request,
+  // or ProvidersResult with query result.
+  oneof result {
+    ExceptionalResult exceptionalResult = 10;
+    ProvidersResult providersResult = 11;
+  }
+
+  /*
+   * ProvidersResult
+   *
+   * Contains a list of ProviderInfo objects, one for each provider matching the query specification.
+   */
+  message ProvidersResult {
+
+    repeated ProviderInfo providerInfos = 1; // List of metadata objects matching query specificiation.
+
+    message ProviderInfo {
+      string id = 1; // Provider unique id.
+      string name = 2; // Provider name.
+      string	description = 3; // Provider description.
+      repeated string tags = 4; // List of tags.
+      repeated Attribute attributes = 5; // List of key/value attributes.
+    }
+  }
+}
+
+
+//
+// ------------------- Provider Metadata Query ---------------------------
+//
+
+/*
+ * QueryProviderMetadataRequest
+ *
+ * Encapsulates the single parameter for a queryProviderMetadata() request, the unique id of a data Provider.
+ */
+message QueryProviderMetadataRequest {
+  string providerId = 1;
+}
+
+/*
+ * QueryProviderMetadataResponse
+ *
+ * Contains results from a queryProviderMetadata() API method request.  Message payload is either an
+ * ExceptionalResult indicating rejection or an error handling the request, or a MetadataResult with a
+ * ProviderMetadata entry for the Provider matching the id specified in the request.
+ */
+message QueryProviderMetadataResponse {
+
+  Timestamp responseTime = 1; // Indicates time response was generated.
+
+  // result: Response contains either an ExceptionalResult indicating a problem handling the request,
+  // or MetadataResult with query result.
+  oneof result {
+    ExceptionalResult exceptionalResult = 10;
+    MetadataResult metadataResult = 11;
+  }
+
+  /*
+   * Metadata Query Result Content.
+   *
+   * Contains a list of ProviderInfo metadata objects, one for each provider matching the query specification.
+   */
+  message MetadataResult {
+
+    repeated ProviderMetadata providerMetadatas = 1; // List of metadata objects matching query specificiation.
+
+    message ProviderMetadata {
+      string id = 1; // Provider id.
+      repeated string pvNames = 2; // List of PV names with buckets using provider.
+      Timestamp firstBucketTime = 3; // Timstamp of first bucket using provider.
+      Timestamp lastBucketTime = 4; // Timestamp of most recent bucket using provider.
+      int32 numBuckets = 5; // Number of buckets using provider.
+    }
+  }
+}
+
+

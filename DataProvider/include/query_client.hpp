@@ -44,7 +44,7 @@ QueryDataRequest makeQueryDataRequest(const std::vector<std::string>& pvNames, c
 QueryTableRequest makeQueryTableRequest(const std::vector<std::string>& pvNames, const Timestamp& beginTime, const Timestamp& endTime, dp::service::query::QueryTableRequest::TableResultFormat format);
 QueryPVMetadataRequest makeQueryPVMetadataRequest(const std::vector<std::string>& pvNames);
 QueryPVMetadataRequest makeQueryPVMetadataRequestWithPattern(const std::string& pattern);
-QueryProvidersRequest makeQueryProvidersRequest(const std::string& textSearch);
+QueryProviderRequest makeQueryProviderRequest(const std::string& textSearch);
 QueryProviderMetadataRequest makeQueryProviderMetadataRequest(const std::string& providerId);
 
 #endif // QUERY_CLIENT_HPP

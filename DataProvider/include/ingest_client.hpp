@@ -17,7 +17,7 @@ using IngestDataRequest = dp::service::ingestion::IngestDataRequest;
 using RegisterProviderRequest = dp::service::ingestion::RegisterProviderRequest;
 using RegisterProviderResponse = dp::service::ingestion::RegisterProviderResponse;
 
-class OspreyClient {
+class IngestClient {
 public:
     explicit OspreyClient(const std::string& server_address);
     RegisterProviderResponse sendRegisterProvider(const RegisterProviderRequest& request);

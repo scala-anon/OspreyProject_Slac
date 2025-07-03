@@ -53,9 +53,8 @@ set(COMMON_SOURCES
 #
 # Executables
 #
-add_executable(mainh5 apps/mainh5.cpp ${COMMON_SOURCES})
+add_executable(h5_to_dp apps/h5_to_dp.cpp ${COMMON_SOURCES})
 
-add_executable(exporter apps/exporter.cpp ${COMMON_SOURCES})
 #
 # Link Libraries
 #
@@ -73,33 +72,16 @@ set(COMMON_LIBRARIES
     absl_base
 )
 
-target_link_libraries(mainh5 PRIVATE ${COMMON_LIBRARIES})
-target_link_libraries(exporter PRIVATE ${COMMON_LIBRARIES})
-
-# Add optional libraries if found
-if(XLSXWRITER_LIBRARY)
-    target_link_libraries(exporter PRIVATE ${XLSXWRITER_LIBRARY})
-endif()
+target_link_libraries(h5_to_dp PRIVATE ${COMMON_LIBRARIES})
 
 #
 # Target Include Directories
 #
-target_include_directories(mainh5 PRIVATE 
+target_include_directories(h5_to_dp PRIVATE 
     ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${CMAKE_BINARY_DIR}/proto
     ${HDF5_INCLUDE_DIRS}
 )
-
-target_include_directories(exporter PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-    ${CMAKE_BINARY_DIR}/proto
-    ${HDF5_INCLUDE_DIRS}
-    $ENV{HOME}/local/include
-)
-
-if(NLOHMANN_JSON_INCLUDE_DIR)
-    target_include_directories(exporter PRIVATE ${NLOHMANN_JSON_INCLUDE_DIR})
-endif()
 
 #
 # Install Scripts

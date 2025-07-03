@@ -3,8 +3,8 @@
 #include <grpcpp/client_context.h>
 #include <iostream>
 
-// --- OspreyClient Implementation ---
-OspreyClient::OspreyClient(const std::string& server_address) {
+// --- IngestClient Implementation ---
+IngestClient::OspreyClient(const std::string& server_address) {
     auto channel = grpc::CreateChannel(server_address, grpc::InsecureChannelCredentials());
     
     // Block until the channel is ready
@@ -17,7 +17,7 @@ OspreyClient::OspreyClient(const std::string& server_address) {
 }
 
 dp::service::ingestion::RegisterProviderResponse
-OspreyClient::sendRegisterProvider(const RegisterProviderRequest& request) {
+IngestClient::sendRegisterProvider(const RegisterProviderRequest& request) {
     RegisterProviderResponse response;
     grpc::ClientContext context;
     grpc::Status status = stub_->registerProvider(&context, request, &response);
@@ -29,7 +29,7 @@ OspreyClient::sendRegisterProvider(const RegisterProviderRequest& request) {
     return response;
 }
 
-std::string OspreyClient::ingestData(const IngestDataRequest& request) {
+std::string IngestClient::ingestData(const IngestDataRequest& request) {
     dp::service::ingestion::IngestDataResponse response;
     grpc::ClientContext context;
     grpc::Status status = stub_->ingestData(&context, request, &response);
@@ -47,7 +47,7 @@ std::string OspreyClient::ingestData(const IngestDataRequest& request) {
     }
 }
 
-std::string OspreyClient::ingestDataStream(const std::vector<IngestDataRequest>& requests) {
+std::string IngestClient::ingestDataStream(const std::vector<IngestDataRequest>& requests) {
     if (requests.empty()) {
         std::cout << "No requests to send in stream" << std::endl;
         return "IngestDataStream Empty";

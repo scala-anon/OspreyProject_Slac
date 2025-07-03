@@ -19,7 +19,7 @@ using RegisterProviderResponse = dp::service::ingestion::RegisterProviderRespons
 
 class IngestClient {
 public:
-    explicit OspreyClient(const std::string& server_address);
+    explicit IngestClient(const std::string& server_address);
     RegisterProviderResponse sendRegisterProvider(const RegisterProviderRequest& request);
     std::string ingestData(const IngestDataRequest& request);
     
@@ -35,6 +35,7 @@ EventMetadata makeEventMetadata(const std::string& desc, uint64_t startEpoch, ui
 SamplingClock makeSamplingClock(uint64_t epoch, uint64_t nano, uint64_t periodNanos, uint32_t count);
 DataValue makeDataValueWithSInt32(int val);
 DataValue makeDataValueWithUInt64(uint64_t val);
+DataValue makeDataValueWithDouble(double val);
 DataValue makeDataValueWithTimestamp(uint64_t sec, uint64_t nano);
 DataColumn makeDataColumn(const std::string& name, const std::vector<DataValue>& values);
 IngestDataRequest makeIngestDataRequest(const std::string& providerId, const std::string& clientRequestId, const std::vector<Attribute>& attributes, const std::vector<std::string>& tags, const EventMetadata& metadata, const SamplingClock& samplingClock, const std::vector<DataColumn>& dataColumns);

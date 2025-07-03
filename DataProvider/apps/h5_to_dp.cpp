@@ -98,7 +98,7 @@ IngestDataRequest createMLDPStubFromPVData(const std::vector<CorrelatedPVData>& 
     columns.emplace_back(makeDataColumn("Timestamps", std::move(timestamp_values)));
     
     // OPTIMIZATION 4: Create PV value matrix for cache-friendly access
-    std::vector<std::vector<int32_t>> pv_value_matrix(all_pv_names.size());
+    std::vector<std::vector<double>> pv_value_matrix(all_pv_names.size());
     for (auto& pv_values : pv_value_matrix) {
         pv_values.resize(correlated_data.size(), 0); // Default to 0
     }
@@ -109,7 +109,7 @@ IngestDataRequest createMLDPStubFromPVData(const std::vector<CorrelatedPVData>& 
         for (const auto& [pv_name, value] : snapshot.pv_values) {
             auto it = pv_name_to_idx.find(pv_name);
             if (it != pv_name_to_idx.end()) {
-                pv_value_matrix[it->second][time_idx] = static_cast<int32_t>(value);
+                pv_value_matrix[it->second][time_idx] = value;
             }
         }
     }
@@ -120,8 +120,8 @@ IngestDataRequest createMLDPStubFromPVData(const std::vector<CorrelatedPVData>& 
         std::vector<DataValue> pv_values;
         pv_values.reserve(correlated_data.size());
         
-        for (int32_t value : pv_value_matrix[pv_idx]) {
-            pv_values.emplace_back(makeDataValueWithSInt32(value));
+        for (double value : pv_value_matrix[pv_idx]) {
+            pv_values.emplace_back(makeDataValueWithDouble(value));
         }
         
         columns.emplace_back(makeDataColumn(pv_name, std::move(pv_values)));

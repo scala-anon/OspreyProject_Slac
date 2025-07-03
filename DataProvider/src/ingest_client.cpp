@@ -4,7 +4,7 @@
 #include <iostream>
 
 // --- IngestClient Implementation ---
-IngestClient::OspreyClient(const std::string& server_address) {
+IngestClient::IngestClient(const std::string& server_address) {
     auto channel = grpc::CreateChannel(server_address, grpc::InsecureChannelCredentials());
     
     // Block until the channel is ready
@@ -162,6 +162,12 @@ DataValue makeDataValueWithSInt32(int val) {
 DataValue makeDataValueWithUInt64(uint64_t val) {
     DataValue dv;
     dv.set_ulongvalue(val);
+    return dv;
+}
+
+DataValue makeDataValueWithDouble(double val){
+    DataValue dv;
+    dv.set_doublevalue(val);
     return dv;
 }
 

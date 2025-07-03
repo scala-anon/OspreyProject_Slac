@@ -277,3 +277,14 @@ message Image {
     PDF = 8;
   }
 }
+
+/*
+ * SerializedDataColumn
+ *
+ * Contains a serialized byte representation of a DataColumn for performance optimization.
+ * Used when clients want to avoid extra serialization operations in gRPC communication.
+ */
+message SerializedDataColumn {
+  bytes serializedData = 1; // Serialized DataColumn byte data
+  string columnName = 2; // Name of the column (for reference)
+}

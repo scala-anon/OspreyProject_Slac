@@ -1,12 +1,11 @@
 // h5_parser.cpp - Implementation for PV Time-Series Data Parsing
+
 #include "h5_parser.hpp"
 #include <iostream>
 #include <filesystem>
 #include <algorithm>
 #include <sstream>
 #include <iomanip>
-#include <unordered_map>  // ADD THIS LINE
-#include <unordered_set>  // ADD THIS LINE
 
 // PVDataCollection Helper Functions Implementation
 void PVDataCollection::addPVSeries(const PVTimeSeries& series) {
@@ -114,6 +113,7 @@ bool H5Parser::parseDirectory() {
 }
 
 // Updated parseFile function for h5_parser.cpp
+
 bool H5Parser::parseFile(const std::string& filename) {
     try {
         // Turn off HDF5 error printing
@@ -422,59 +422,39 @@ bool H5Parser::parseTimeseriesGroup(H5::Group& group, const std::string& group_n
 }
 
 std::vector<CorrelatedPVData> H5Parser::getCorrelatedData(uint64_t start_time, uint64_t end_time) const {
-    std::cout << "Using OPTIMIZED correlation algorithm..." << std::endl;
-    auto correlation_start = std::chrono::high_resolution_clock::now();
+    std::vector<CorrelatedPVData> correlated_data;
     
-    // OPTIMIZATION 1: Build timestamp-indexed data structure in single pass
-    std::unordered_map<uint64_t, std::unordered_map<std::string, double>> timestamp_data;
-    std::unordered_map<uint64_t, std::unordered_map<std::string, std::string>> timestamp_status;
-    std::unordered_set<uint64_t> unique_timestamps;
+    // Get all unique timestamps in the range
+    std::set<uint64_t> unique_timestamps;
     
-    // Single pass through all data - O(total_measurements)
     for (const auto& series : pv_data_.pv_series) {
         for (const auto& measurement : series.measurements) {
-            uint64_t ts = measurement.timestamp_seconds;
-            if (ts >= start_time && ts <= end_time) {
-                timestamp_data[ts][series.pv_name] = measurement.value;
-                timestamp_status[ts][series.pv_name] = measurement.status;
-                unique_timestamps.insert(ts);
+            if (measurement.timestamp_seconds >= start_time && 
+                measurement.timestamp_seconds <= end_time) {
+                unique_timestamps.insert(measurement.timestamp_seconds);
             }
         }
     }
     
-    // OPTIMIZATION 2: Create sorted result - O(unique_timestamps * log(unique_timestamps))
-    std::vector<uint64_t> sorted_timestamps(unique_timestamps.begin(), unique_timestamps.end());
-    std::sort(sorted_timestamps.begin(), sorted_timestamps.end());
-    
-    // OPTIMIZATION 3: Pre-allocate result vector
-    std::vector<CorrelatedPVData> correlated_data;
-    correlated_data.reserve(sorted_timestamps.size());
-    
-    // OPTIMIZATION 4: Build result efficiently - O(unique_timestamps)  
-    for (uint64_t timestamp : sorted_timestamps) {
+    // For each timestamp, collect all PV values
+    for (uint64_t timestamp : unique_timestamps) {
         CorrelatedPVData corr_data;
         corr_data.timestamp_seconds = timestamp;
         corr_data.timestamp_nanoseconds = 0;
         
-        const auto& unordered_values = timestamp_data[timestamp];
-        const auto& unordered_status = timestamp_status[timestamp];
-        
-        for (const auto& [pv_name, value] : unordered_values) {
-            corr_data.pv_values[pv_name] = value;
+        for (const auto& series : pv_data_.pv_series) {
+            // Find measurement at this timestamp
+            for (const auto& measurement : series.measurements) {
+                if (measurement.timestamp_seconds == timestamp) {
+                    corr_data.pv_values[series.pv_name] = measurement.value;
+                    corr_data.pv_status[series.pv_name] = measurement.status;
+                    break;
+                }
+            }
         }
         
-        for (const auto& [pv_name, status] : unordered_status) {
-            corr_data.pv_status[pv_name] = status;
-        }
-        
-        correlated_data.push_back(std::move(corr_data));
+        correlated_data.push_back(corr_data);
     }
-    
-    auto correlation_end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(correlation_end - correlation_start);
-    
-    std::cout << "OPTIMIZED correlation complete: " << correlated_data.size() 
-              << " snapshots, took " << duration.count() << "ms (was ~60000ms)" << std::endl;
     
     return correlated_data;
 }

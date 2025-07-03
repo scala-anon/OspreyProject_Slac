@@ -8,7 +8,9 @@
 #
 add_library(myproto
     common.proto
-    ingestion.proto)
+    ingestion.proto
+    annotation.proto
+    query.proto)
 
 # use dynamic detection of the grpc_cpp_plugin path
 find_program(GRPC_CPP_PLUGIN grpc_cpp_plugin REQUIRED)

@@ -4,6 +4,8 @@
 #include <iostream>
 #include <fstream>
 #include <thread>
+#include <unordered_map>  // ADD THIS LINE
+#include <unordered_set>  // ADD THIS LINE
 
 // Memory monitoring structure
 struct MemoryInfo {
@@ -51,7 +53,7 @@ void printMemoryUsage(const std::string& context) {
               << "Peak=" << (info.peak_memory_kb / 1024) << "MB" << std::endl;
 }
 
-// Convert H5 PV data to MLDP format
+// OPTIMIZED Convert H5 PV data to MLDP format
 IngestDataRequest createMLDPStubFromPVData(const std::vector<CorrelatedPVData>& correlated_data,
                                            const std::string& providerId,
                                            const std::string& requestId) {
@@ -59,49 +61,77 @@ IngestDataRequest createMLDPStubFromPVData(const std::vector<CorrelatedPVData>& 
         throw std::runtime_error("No correlated data to process");
     }
     
-    // Get all unique PV names
-    std::set<std::string> all_pv_names;
+    auto start_time = std::chrono::high_resolution_clock::now();
+    
+    // OPTIMIZATION 1: Pre-compute all unique PV names efficiently
+    std::unordered_set<std::string> pv_name_set;
     for (const auto& snapshot : correlated_data) {
         for (const auto& [pv_name, value] : snapshot.pv_values) {
-            all_pv_names.insert(pv_name);
+            pv_name_set.insert(pv_name);
         }
     }
     
-    std::cout << "Creating MLDP stub for " << all_pv_names.size() << " PVs, " 
+    std::vector<std::string> all_pv_names(pv_name_set.begin(), pv_name_set.end());
+    std::sort(all_pv_names.begin(), all_pv_names.end());
+    
+    // Create index for O(1) PV lookups
+    std::unordered_map<std::string, size_t> pv_name_to_idx;
+    for (size_t i = 0; i < all_pv_names.size(); ++i) {
+        pv_name_to_idx[all_pv_names[i]] = i;
+    }
+    
+    std::cout << "Creating OPTIMIZED MLDP stub for " << all_pv_names.size() << " PVs, " 
               << correlated_data.size() << " time points" << std::endl;
     
-    // Create data columns for each PV
+    // OPTIMIZATION 2: Pre-allocate all memory
     std::vector<DataColumn> columns;
-    std::vector<DataValue> timestamp_values;
+    columns.reserve(all_pv_names.size() + 1);
     
-    // Create timestamp column
+    // OPTIMIZATION 3: Create timestamp column efficiently
+    std::vector<DataValue> timestamp_values;
+    timestamp_values.reserve(correlated_data.size());
+    
     for (const auto& snapshot : correlated_data) {
-        timestamp_values.push_back(makeDataValueWithTimestamp(
+        timestamp_values.emplace_back(makeDataValueWithTimestamp(
             snapshot.timestamp_seconds, snapshot.timestamp_nanoseconds));
     }
-    columns.push_back(makeDataColumn("Timestamps", timestamp_values));
+    columns.emplace_back(makeDataColumn("Timestamps", std::move(timestamp_values)));
     
-    // Create column for each PV
-    for (const std::string& pv_name : all_pv_names) {
-        std::vector<DataValue> pv_values;
-        
-        for (const auto& snapshot : correlated_data) {
-            auto it = snapshot.pv_values.find(pv_name);
-            if (it != snapshot.pv_values.end()) {
-                // Use actual value
-                pv_values.push_back(makeDataValueWithSInt32(static_cast<int32_t>(it->second)));
-            } else {
-                // Use 0 as default for missing values
-                pv_values.push_back(makeDataValueWithSInt32(0));
+    // OPTIMIZATION 4: Create PV value matrix for cache-friendly access
+    std::vector<std::vector<int32_t>> pv_value_matrix(all_pv_names.size());
+    for (auto& pv_values : pv_value_matrix) {
+        pv_values.resize(correlated_data.size(), 0); // Default to 0
+    }
+    
+    // Fill matrix in single pass - cache friendly
+    for (size_t time_idx = 0; time_idx < correlated_data.size(); ++time_idx) {
+        const auto& snapshot = correlated_data[time_idx];
+        for (const auto& [pv_name, value] : snapshot.pv_values) {
+            auto it = pv_name_to_idx.find(pv_name);
+            if (it != pv_name_to_idx.end()) {
+                pv_value_matrix[it->second][time_idx] = static_cast<int32_t>(value);
             }
         }
+    }
+    
+    // OPTIMIZATION 5: Create columns efficiently
+    for (size_t pv_idx = 0; pv_idx < all_pv_names.size(); ++pv_idx) {
+        const std::string& pv_name = all_pv_names[pv_idx];
+        std::vector<DataValue> pv_values;
+        pv_values.reserve(correlated_data.size());
         
-        columns.push_back(makeDataColumn(pv_name, pv_values));
-        std::cout << "  Added column for " << pv_name << " with " << pv_values.size() << " values" << std::endl;
+        for (int32_t value : pv_value_matrix[pv_idx]) {
+            pv_values.emplace_back(makeDataValueWithSInt32(value));
+        }
+        
+        columns.emplace_back(makeDataColumn(pv_name, std::move(pv_values)));
+        if (pv_idx % 20 == 0) {
+            std::cout << "  Created column " << pv_idx << "/" << all_pv_names.size() << std::endl;
+        }
     }
     
     // Create sampling clock based on data
-    uint64_t start_time = correlated_data.front().timestamp_seconds;
+    uint64_t start_time_sec = correlated_data.front().timestamp_seconds;
     uint64_t start_nano = correlated_data.front().timestamp_nanoseconds;
     
     // Calculate period (assuming regular sampling)
@@ -111,18 +141,22 @@ IngestDataRequest createMLDPStubFromPVData(const std::vector<CorrelatedPVData>& 
         period_nanos = time_diff * 1000000000; // Convert to nanoseconds
     }
     
-    auto clock = makeSamplingClock(start_time, start_nano, period_nanos, correlated_data.size());
+    auto clock = makeSamplingClock(start_time_sec, start_nano, period_nanos, correlated_data.size());
     
     // Create event metadata
     uint64_t end_time = correlated_data.back().timestamp_seconds;
     uint64_t end_nano = correlated_data.back().timestamp_nanoseconds;
-    
+   
     auto metadata = makeEventMetadata("H5 PV Time-Series Data", 
-                                      start_time, start_nano,
+                                      start_time_sec, start_nano,
                                       end_time, end_nano);
     
+    auto end_time_total = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time_total - start_time);
+    std::cout << "OPTIMIZED protobuf creation took " << duration.count() << "ms" << std::endl;
+    
     // Create the complete ingestion request
-    return makeIngestDataRequest(providerId, requestId, {}, {}, metadata, clock, columns);
+    return makeIngestDataRequest(providerId, requestId, {}, {}, metadata, clock, std::move(columns));
 }
 
 int main(int argc, char* argv[]) {
@@ -150,7 +184,7 @@ int main(int argc, char* argv[]) {
     
     printMemoryUsage("Application Start");
     
-    std::cout << "=== H5 to MLDP Data Ingestion (Streaming) ===" << std::endl;
+    std::cout << "=== H5 to MLDP Data Ingestion (OPTIMIZED Streaming) ===" << std::endl;
     std::cout << "H5 Path: " << h5_path << std::endl;
     std::cout << "Mode: " << (local_only ? "Local parsing only" : "Parse and send to MLDP (streaming)") << std::endl;
     std::cout << "Stream chunk size: " << stream_chunk_size << " requests per stream" << std::endl;
@@ -194,7 +228,7 @@ int main(int argc, char* argv[]) {
         uint64_t nowNano = getCurrentEpochNanos();
         
         // Register as data provider
-        auto regReq = makeRegisterProviderRequest("H5_DataProvider_Streaming", {}, nowSec, nowNano);
+        auto regReq = makeRegisterProviderRequest("H5_DataProvider_Streaming_Optimized", {}, nowSec, nowNano);
         auto regResp = client.sendRegisterProvider(regReq);
         
         if (!regResp.has_registrationresult()) {
@@ -207,8 +241,8 @@ int main(int argc, char* argv[]) {
         
         printMemoryUsage("After MLDP Registration");
         
-        // Step 3: Get correlated PV data
-        std::cout << "\n--- Step 3: Preparing Data for MLDP ---" << std::endl;
+        // Step 3: Get correlated PV data (OPTIMIZED - uses the optimized h5_parser.cpp function)
+        std::cout << "\n--- Step 3: Preparing Data for MLDP (OPTIMIZED) ---" << std::endl;
         auto correlated_data = parser.getCorrelatedData(
             pv_data.earliest_time, 
             pv_data.latest_time
@@ -220,13 +254,13 @@ int main(int argc, char* argv[]) {
         }
         
         std::cout << "Found " << correlated_data.size() << " correlated time snapshots" << std::endl;
-        printMemoryUsage("After Data Correlation");
+        printMemoryUsage("After OPTIMIZED Data Correlation");
         
         // Step 4: Send data to MLDP using streaming
         std::cout << "\n--- Step 4: Sending Data to MLDP (Streaming) ---" << std::endl;
         
-        // Data chunk size for individual requests (smaller than before)
-        const size_t DATA_CHUNK_SIZE = 100; // Smaller chunks since we're using streaming
+        // Data chunk size for individual requests (optimized size)
+        const size_t DATA_CHUNK_SIZE = 10; // Optimized chunk size for better performance
         size_t total_requests_sent = 0;
         size_t total_data_points_sent = 0;
         
@@ -252,9 +286,10 @@ int main(int argc, char* argv[]) {
                     correlated_data.begin() + data_end
                 );
                 
-                std::string requestId = "h5_stream_" + std::to_string(total_requests_sent + req_idx);
+                std::string requestId = "h5_stream_opt_" + std::to_string(total_requests_sent + req_idx);
                 
                 try {
+                    // Uses optimized createMLDPStubFromPVData function
                     auto ingestRequest = createMLDPStubFromPVData(chunk, providerId, requestId);
                     stream_requests.push_back(std::move(ingestRequest));
                     total_data_points_sent += chunk.size();
@@ -295,7 +330,7 @@ int main(int argc, char* argv[]) {
         
         printMemoryUsage("After All Streams");
         
-        std::cout << "\n=== Streaming Ingestion Complete ===" << std::endl;
+        std::cout << "\n=== OPTIMIZED Streaming Ingestion Complete ===" << std::endl;
         std::cout << "Successfully sent " << total_requests_sent << " requests in streaming mode" << std::endl;
         std::cout << "Total data points sent: " << total_data_points_sent << std::endl;
         std::cout << "Data from " << pv_data.source_files.size() << " H5 files ingested" << std::endl;

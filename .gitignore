@@ -1,7 +1,9 @@
-# CMake build folders
-/build/
-/CMakeFiles/
-/cmake-build-*/
+# CMake build folders (fixed to match subdirectories too)
+build/
+**/build/
+CMakeFiles/
+**/CMakeFiles/
+cmake-build-*/
 
 # Build artifacts
 *.o

@@ -9,6 +9,25 @@ set(CMAKE_CXX_STANDARD 17)
 find_package(Protobuf REQUIRED)
 find_package(HDF5 REQUIRED COMPONENTS CXX)
 
+# Add user local paths
+set(CMAKE_PREFIX_PATH ${CMAKE_PREFIX_PATH} "$ENV{HOME}/local")
+
+# Try to find optional dependencies in user directories
+find_path(NLOHMANN_JSON_INCLUDE_DIR nlohmann/json.hpp 
+    PATHS $ENV{HOME}/local/include /usr/local/include /usr/include)
+find_library(XLSXWRITER_LIBRARY xlsxwriter 
+    PATHS $ENV{HOME}/local/lib /usr/local/lib /usr/lib64 /usr/lib)
+
+if(NLOHMANN_JSON_INCLUDE_DIR)
+    message(STATUS "Found nlohmann/json: ${NLOHMANN_JSON_INCLUDE_DIR}")
+    add_definitions(-DHAVE_NLOHMANN_JSON)
+endif()
+
+if(XLSXWRITER_LIBRARY)
+    message(STATUS "Found xlsxwriter: ${XLSXWRITER_LIBRARY}")
+    add_definitions(-DHAVE_XLSXWRITER)
+endif()
+
 # Add subdirectory for proto files
 add_subdirectory(proto)
 
@@ -36,6 +55,7 @@ set(COMMON_SOURCES
 #
 add_executable(mainh5 apps/mainh5.cpp ${COMMON_SOURCES})
 
+add_executable(exporter apps/exporter.cpp ${COMMON_SOURCES})
 #
 # Link Libraries
 #
@@ -54,6 +74,12 @@ set(COMMON_LIBRARIES
 )
 
 target_link_libraries(mainh5 PRIVATE ${COMMON_LIBRARIES})
+target_link_libraries(exporter PRIVATE ${COMMON_LIBRARIES})
+
+# Add optional libraries if found
+if(XLSXWRITER_LIBRARY)
+    target_link_libraries(exporter PRIVATE ${XLSXWRITER_LIBRARY})
+endif()
 
 #
 # Target Include Directories
@@ -63,6 +89,17 @@ target_include_directories(mainh5 PRIVATE
     ${CMAKE_BINARY_DIR}/proto
     ${HDF5_INCLUDE_DIRS}
 )
+
+target_include_directories(exporter PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_BINARY_DIR}/proto
+    ${HDF5_INCLUDE_DIRS}
+    $ENV{HOME}/local/include
+)
+
+if(NLOHMANN_JSON_INCLUDE_DIR)
+    target_include_directories(exporter PRIVATE ${NLOHMANN_JSON_INCLUDE_DIR})
+endif()
 
 #
 # Install Scripts

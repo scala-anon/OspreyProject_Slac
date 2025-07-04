@@ -245,7 +245,8 @@ Once installation is complete:
 
 # Streaming with custom chunk size
 ./h5_to_dp /path/to/h5/files --stream-chunk-size=20
-
+```bash
+```
 ## Credits
 
 ### Project Team

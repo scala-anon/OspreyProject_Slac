@@ -81,7 +81,7 @@ int main(int argc, char* argv[]) {
     try {
         // Connect to MLDP QUERY SERVICE (not ingestion!)
         std::cout << "Connecting to MLDP query server..." << std::endl;
-        QueryClient queryClient;  // ✅ FIXED: Uses default localhost:50052 for queries
+        QueryClient queryClient;  
         
         // Configure NPY export
         NPYExportConfig config;

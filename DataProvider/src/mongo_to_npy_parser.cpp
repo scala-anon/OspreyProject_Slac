@@ -390,7 +390,7 @@ bool MongoToNPYParser::queryAndExportPVs(const std::vector<std::string>& pv_name
         
         // First, try with serialized data columns (likely what your MLDP returns)
         std::cout << "Trying query with serialized data columns..." << std::endl;
-        auto request_serialized = makeQueryDataRequest(pv_names, begin_ts, end_ts, true);  // true = serialized
+        auto request_serialized = makeQueryDataRequest(pv_names, begin_ts, end_ts, false);  // true = serialized
         
         try {
             responses = query_client_.queryDataStream(request_serialized);

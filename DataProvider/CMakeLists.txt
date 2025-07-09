@@ -48,13 +48,14 @@ set(COMMON_SOURCES
     src/h5_parser.cpp
     src/annotate_client.cpp
     src/query_client.cpp
+    src/mongo_to_npy_parser.cpp
 )
 
 #
 # Executables
 #
 add_executable(h5_to_dp apps/h5_to_dp.cpp ${COMMON_SOURCES})
-
+add_executable(mongo_to_npy apps/mongo_to_npy.cpp ${COMMON_SOURCES})
 #
 # Link Libraries
 #
@@ -73,6 +74,7 @@ set(COMMON_LIBRARIES
 )
 
 target_link_libraries(h5_to_dp PRIVATE ${COMMON_LIBRARIES})
+target_link_libraries(mongo_to_npy PRIVATE ${COMMON_LIBRARIES})
 
 #
 # Target Include Directories
@@ -80,6 +82,11 @@ target_link_libraries(h5_to_dp PRIVATE ${COMMON_LIBRARIES})
 target_include_directories(h5_to_dp PRIVATE 
     ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${CMAKE_BINARY_DIR}/proto
+    ${HDF5_INCLUDE_DIRS}
+)
+target_include_directories(mongo_to_npy PRIVATE 
+    ${CMAKE_CURRENT_SOURCE_DIR}/include 
+    ${CMAKE_BINARY_DIR}/proto 
     ${HDF5_INCLUDE_DIRS}
 )
 

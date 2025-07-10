@@ -4,97 +4,147 @@
 #include <string>
 #include <vector>
 #include <map>
-#include <set>
-#include <chrono>
-#include "H5Cpp.h"
+#include <cstdint>
+#include <memory>
+#include <H5Cpp.h>
 
-// Single PV measurement at a specific time
-struct PVMeasurement {
-    uint64_t timestamp_seconds;      // Unix epoch seconds
-    uint64_t timestamp_nanoseconds;  // Nanosecond precision
-    double value;                    // PV value (could be int, double, etc.)
-    std::string status;              // Optional: "GOOD", "BAD", "DISCONNECTED"
-    double severity;                 // Optional: alarm severity
+// File metadata extracted from naming convention
+struct H5FileMetadata {
+    std::string origin;               // "CU"
+    std::string pathway;              // "HXR"
+    std::string date;                 // "20250623"
+    std::string time;                 // "195500"
+    std::string project;              // "CoAD"
+    std::string full_path;
+    uint64_t file_timestamp_seconds;
+    bool valid_timestamp;
+    
+    H5FileMetadata() : file_timestamp_seconds(0), valid_timestamp(false) {}
 };
 
-// Complete time-series for one PV
-struct PVTimeSeries {
-    std::string pv_name;             // e.g., "S01-GCC-01", "S01A-BPM-X"
-    std::string description;         // Human readable description
-    std::string units;               // "mbar", "mm", "volts", etc.
-    std::string data_type;           // "DOUBLE", "LONG", "STRING"
+// Signal name parsing result
+struct SignalInfo {
+    std::string device;               // "KLYS", "BPMS"
+    std::string device_area;          // "LI23", "DMPH"
+    std::string device_location;      // "31", "502"
+    std::string device_attribute;     // "AMPL", "TMITBR", "PHAS_FASTBR"
+    std::string full_name;            // "KLYS_LI23_31_AMPL"
+    std::string label;                // From H5 attribute: "KLYS:LI23:31:AMPL"
+    std::string matlab_class;         // From H5 attribute: "double"
+    std::string units;                // Inferred: "MV/m"
+    std::string signal_type;          // Inferred: "amplitude"
     
-    // Time-series data
-    std::vector<PVMeasurement> measurements;
-    
-    // Metadata
-    uint64_t start_time_seconds;     // First measurement time
-    uint64_t end_time_seconds;       // Last measurement time
-    double sample_rate_hz;           // Sampling frequency
-    size_t total_samples;            // Number of measurements
-    
-    // File info
-    std::string source_file;         // Which H5 file this came from
-    std::string dataset_path;        // Path within H5 file
+    SignalInfo() : units("unknown"), signal_type("measurement") {}
 };
 
-// Collection of all PV data from multiple H5 files
-struct PVDataCollection {
-    std::vector<PVTimeSeries> pv_series;        // All PV time-series
-    std::map<std::string, size_t> pv_index;     // Quick lookup: PV name -> index
+// Timestamp data structure (shared across signals from same file)
+struct TimestampData {
+    std::vector<uint64_t> seconds;    // secondsPastEpoch array
+    std::vector<uint64_t> nanoseconds; // nanoseconds array
+    uint64_t period_nanos;            // Calculated sampling period
+    bool is_regular_sampling;         // True if regular sampling detected
+    size_t count;                     // Number of timestamps
+    uint64_t start_time_sec;          // First timestamp seconds
+    uint64_t start_time_nano;         // First timestamp nanoseconds
+    uint64_t end_time_sec;            // Last timestamp seconds
+    uint64_t end_time_nano;           // Last timestamp nanoseconds
     
-    // Global metadata
-    uint64_t earliest_time;          // Earliest timestamp across all PVs
-    uint64_t latest_time;            // Latest timestamp across all PVs
-    std::vector<std::string> source_files;  // List of H5 files processed
-    
-    // Helper functions
-    void addPVSeries(const PVTimeSeries& series);
-    PVTimeSeries* findPV(const std::string& pv_name);
-    std::vector<std::string> getAllPVNames() const;
-    size_t getTotalMeasurements() const;
+    TimestampData() : period_nanos(1000000000), is_regular_sampling(false), count(0),
+                     start_time_sec(0), start_time_nano(0), end_time_sec(0), end_time_nano(0) {}
 };
 
-// For MLDP ingestion - correlated data at same timestamps
-struct CorrelatedPVData {
-    uint64_t timestamp_seconds;
-    uint64_t timestamp_nanoseconds;
-    std::map<std::string, double> pv_values;    // PV_name -> value
-    std::map<std::string, std::string> pv_status; // PV_name -> status
+// Complete signal data
+struct SignalData {
+    SignalInfo info;                  // Parsed signal metadata
+    std::vector<double> values;       // Signal values
+    std::shared_ptr<TimestampData> timestamps; // Shared timestamp reference
+    H5FileMetadata file_metadata;     // Source file metadata
+    
+    SignalData() = default;
+    SignalData(const SignalData& other) = default;
+    SignalData& operator=(const SignalData& other) = default;
+    SignalData(SignalData&& other) = default;
+    SignalData& operator=(SignalData&& other) = default;
 };
 
+// Main parser class
 class H5Parser {
 public:
-    explicit H5Parser(const std::string& h5_path);
+    explicit H5Parser(const std::string& h5_directory_path);
     ~H5Parser();
     
     // Main parsing functions
     bool parseDirectory();
-    bool parseFile(const std::string& filename);
+    bool parseFile(const std::string& filepath);
     
     // Data access
-    const PVDataCollection& getPVData() const { return pv_data_; }
-    std::vector<CorrelatedPVData> getCorrelatedData(uint64_t start_time, uint64_t end_time) const;
+    std::vector<SignalData> getAllSignals() const;
+    std::vector<SignalData> getSignalsByDevice(const std::string& device) const;
+    std::vector<SignalData> getSignalsByDeviceArea(const std::string& device_area) const;
+    std::vector<SignalData> getSignalsByDeviceAttribute(const std::string& device_attribute) const;
+    std::vector<SignalData> getSignalsByProject(const std::string& project) const;
     
-    // MLDP integration helpers
-    std::vector<std::string> getAllPVNames() const;
-    PVTimeSeries* getPVSeries(const std::string& pv_name);
+    // Individual signal lookup
+    SignalData* findSignal(const std::string& signal_name);
+    const SignalData* findSignal(const std::string& signal_name) const;
     
-    // Statistics
+    // Statistics and summary
     void printSummary() const;
+    void printDetailedSummary() const;
+    size_t getTotalSignals() const { return parsed_signals_.size(); }
+    size_t getTotalFiles() const { return file_timestamps_.size(); }
+    
+    // File metadata access
+    std::vector<H5FileMetadata> getFileMetadata() const;
     
 private:
-    std::string h5_path_;
-    PVDataCollection pv_data_;
+    std::string h5_directory_;
+    std::vector<SignalData> parsed_signals_;
+    std::map<std::string, std::shared_ptr<TimestampData>> file_timestamps_; // filepath -> timestamps
     
-    // H5 parsing helpers
-    bool parsePVDataset(H5::H5File& file, const std::string& dataset_name);
-    bool parseTimeseriesGroup(H5::Group& group, const std::string& group_name);
-    uint64_t convertToUnixTime(const std::string& timestamp_str);
+    // File discovery and validation
+    std::vector<std::string> discoverH5Files() const;
+    bool matchesNamingConvention(const std::string& filepath) const;
     
-    // Data organization
-    void correlatePVData();
-    void validateTimestamps();
+    // Filename parsing
+    H5FileMetadata parseFilename(const std::string& filepath) const;
+    uint64_t parseTimestamp(const std::string& date, const std::string& time) const;
+    
+    // H5 file processing
+    std::shared_ptr<TimestampData> extractTimestamps(H5::H5File& file) const;
+    std::vector<std::string> getSignalDatasets(H5::H5File& file) const;
+    
+    // Signal processing
+    SignalInfo parseSignalName(const std::string& signal_name) const;
+    SignalData processSignal(H5::H5File& file, 
+                           const std::string& signal_name,
+                           std::shared_ptr<TimestampData> timestamps,
+                           const H5FileMetadata& file_metadata) const;
+    
+    // H5 attribute reading
+    std::string readStringAttribute(H5::DataSet& dataset, const std::string& attr_name) const;
+    
+    // Timestamp analysis
+    uint64_t calculatePeriodNanos(const std::vector<uint64_t>& seconds, 
+                                 const std::vector<uint64_t>& nanoseconds) const;
+    bool checkRegularSampling(const std::vector<uint64_t>& seconds, 
+                             const std::vector<uint64_t>& nanoseconds,
+                             uint64_t expected_period) const;
+    
+    // Unit and type inference
+    std::string inferUnits(const std::string& device_attribute) const;
+    std::string inferSignalType(const std::string& device_attribute) const;
+    
+    // Validation
+    bool validateDataConsistency(const std::vector<double>& values, 
+                               const TimestampData& timestamps,
+                               const std::string& signal_name) const;
+    
+    // Utility functions
+    void printDeviceSummary() const;
+    void printDeviceAreaSummary() const;
+    void printProjectSummary() const;
+    void printTimingSummary() const;
 };
 
 #endif // H5_PARSER_HPP

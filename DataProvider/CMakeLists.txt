@@ -62,7 +62,7 @@ set(COMMON_SOURCES
 add_executable(h5_to_dp apps/h5_to_dp.cpp ${COMMON_SOURCES})
 add_executable(mongo_to_npy apps/mongo_to_npy.cpp ${COMMON_SOURCES})
 add_executable(data_decoder apps/data_decoder.cpp ${COMMON_SOURCES})
-
+add_executable(DataProvider_CLI apps/DataProvider_CLI.cpp ${COMMON_SOURCES})
 #
 # Link Libraries
 #
@@ -83,6 +83,7 @@ set(COMMON_LIBRARIES
 target_link_libraries(h5_to_dp PRIVATE ${COMMON_LIBRARIES})
 target_link_libraries(mongo_to_npy PRIVATE ${COMMON_LIBRARIES})
 target_link_libraries(data_decoder PRIVATE ${COMMON_LIBRARIES})
+target_link_libraries(DataProvider_CLI PRIVATE ${COMMON_LIBRARIES})
 
 #
 # Target Include Directories
@@ -111,9 +112,22 @@ target_include_directories(data_decoder PRIVATE
     ${HDF5_INCLUDE_DIRS}
 )
 
+target_include_directories(DataProvider_CLI PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/clients
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/parsers
+    ${CMAKE_BINARY_DIR}/proto
+    ${HDF5_INCLUDE_DIRS}
+)
+
 #
 # Install Scripts
 #
+
+install(TARGETS DataProvider_CLI
+    RUNTIME DESTINATION bin
+)
+
 install(PROGRAMS
     scripts/stub_h5
     DESTINATION bin

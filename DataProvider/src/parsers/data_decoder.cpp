@@ -6,6 +6,8 @@
 #include <regex>
 #include <ctime>
 #include <stdexcept>
+#include <cmath>
+#include <limits>
 
 // =============================================================================
 // DecodedPVSeries Implementation
@@ -20,20 +22,30 @@ void DecodedPVSeries::calculateStats() {
     
     total_points = data_points.size();
     
-    auto minmax = std::minmax_element(data_points.begin(), data_points.end(),
-        [](const DecodedDataPoint& a, const DecodedDataPoint& b) {
-            return a.value < b.value;
-        });
+    // Collect only valid (non-NaN, finite) values
+    std::vector<double> valid_values;
+    valid_values.reserve(data_points.size());
     
-    min_value = minmax.first->value;
-    max_value = minmax.second->value;
+    for (const auto& point : data_points) {
+        if (std::isfinite(point.value) && !std::isnan(point.value)) {
+            valid_values.push_back(point.value);
+        }
+    }
     
-    double sum = std::accumulate(data_points.begin(), data_points.end(), 0.0,
-        [](double sum, const DecodedDataPoint& point) {
-            return sum + point.value;
-        });
+    if (valid_values.empty()) {
+        // All values are NaN/infinite
+        min_value = max_value = avg_value = std::numeric_limits<double>::quiet_NaN();
+        return;
+    }
     
-    avg_value = sum / total_points;
+    // Calculate min/max from valid values only
+    auto minmax = std::minmax_element(valid_values.begin(), valid_values.end());
+    min_value = *minmax.first;
+    max_value = *minmax.second;
+    
+    // Calculate average from valid values only
+    double sum = std::accumulate(valid_values.begin(), valid_values.end(), 0.0);
+    avg_value = sum / valid_values.size();
 }
 
 std::vector<DecodedDataPoint> DecodedPVSeries::getDataInRange(
@@ -304,9 +316,9 @@ void DataDecoder::printDecodedData(const std::vector<DecodedPVSeries>& decoded_d
         std::cout << "Total Points: " << series.total_points << std::endl;
         
         if (series.total_points > 0) {
-            std::cout << "Value Range: " << std::fixed << std::setprecision(3) 
-                      << series.min_value << " to " << series.max_value << std::endl;
-            std::cout << "Average: " << series.avg_value << std::endl;
+           std::cout << "Value Range: " << std::scientific << std::setprecision(3) 
+                << series.min_value << " to " << series.max_value << std::endl;
+            std::cout << "Average: " << std::scientific << std::setprecision(3) << series.avg_value << std::endl;
         }
         
         std::cout << "\nSample Data Points (showing up to " << max_points << "):" << std::endl;
@@ -437,23 +449,23 @@ void DataDecoder::printStatistics(const std::vector<DecodedPVSeries>& decoded_da
     
     std::cout << "Total PVs: " << decoded_data.size() << std::endl;
     std::cout << "Total Data Points: " << total_points << std::endl;
-    std::cout << "Average Points per PV: " 
+    std::cout << "Average Points per PV: "
               << (decoded_data.empty() ? 0 : total_points / decoded_data.size()) << std::endl;
     
     std::cout << "\nPer-PV Statistics:" << std::endl;
-    std::cout << std::left << std::setw(25) << "PV Name" 
+    std::cout << std::left << std::setw(25) << "PV Name"
               << std::setw(10) << "Points"
-              << std::setw(12) << "Min Value"
-              << std::setw(12) << "Max Value"
-              << std::setw(12) << "Avg Value" << std::endl;
-    std::cout << std::string(70, '-') << std::endl;
+              << std::setw(15) << "Min Value"
+              << std::setw(15) << "Max Value"
+              << std::setw(15) << "Avg Value" << std::endl;
+    std::cout << std::string(85, '-') << std::endl;
     
     for (const auto& series : decoded_data) {
         std::cout << std::left << std::setw(25) << series.pv_name.substr(0, 24)
                   << std::setw(10) << series.total_points
-                  << std::setw(12) << std::fixed << std::setprecision(3) << series.min_value
-                  << std::setw(12) << series.max_value
-                  << std::setw(12) << series.avg_value << std::endl;
+                  << std::setw(15) << std::scientific << std::setprecision(2) << series.min_value
+                  << std::setw(15) << series.max_value
+                  << std::setw(15) << series.avg_value << std::endl;
     }
 }
 

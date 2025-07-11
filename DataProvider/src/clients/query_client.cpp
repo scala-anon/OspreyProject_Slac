@@ -6,7 +6,17 @@
 
 // --- QueryClient Implementation ---
 QueryClient::QueryClient(const std::string& server_address) {
-    auto channel = grpc::CreateChannel(server_address, grpc::InsecureChannelCredentials());
+    
+    // Create channel with increased message size limits
+    grpc::ChannelArguments args;
+    args.SetMaxReceiveMessageSize(67108864);
+    args.SetMaxSendMessageSize(67108864);
+
+    auto channel = grpc::CreateCustomChannel(
+        server_address,
+        grpc::InsecureChannelCredentials(),
+        args
+    );
 
     // Block until the channel is ready
     if (!channel->WaitForConnected(std::chrono::system_clock::now() + std::chrono::seconds(5))) {

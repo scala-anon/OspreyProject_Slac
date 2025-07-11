@@ -13,9 +13,9 @@ find_package(HDF5 REQUIRED COMPONENTS CXX)
 set(CMAKE_PREFIX_PATH ${CMAKE_PREFIX_PATH} "$ENV{HOME}/local")
 
 # Try to find optional dependencies in user directories
-find_path(NLOHMANN_JSON_INCLUDE_DIR nlohmann/json.hpp 
+find_path(NLOHMANN_JSON_INCLUDE_DIR nlohmann/json.hpp
     PATHS $ENV{HOME}/local/include /usr/local/include /usr/include)
-find_library(XLSXWRITER_LIBRARY xlsxwriter 
+find_library(XLSXWRITER_LIBRARY xlsxwriter
     PATHS $ENV{HOME}/local/lib /usr/local/lib /usr/lib64 /usr/lib)
 
 if(NLOHMANN_JSON_INCLUDE_DIR)
@@ -39,16 +39,21 @@ include_directories(/usr/include)
 include_directories(include)
 include_directories(${CMAKE_BINARY_DIR}/proto)
 
+# Add the new subdirectories to include path
+include_directories(include/clients)
+include_directories(include/parsers)
+
 #
-# Common Sources
+# Common Sources - UPDATED PATHS
 #
 set(COMMON_SOURCES
-    src/ingest_client.cpp
-    src/PacketParser.cpp
-    src/h5_parser.cpp
-    src/annotate_client.cpp
-    src/query_client.cpp
-    src/mongo_to_npy_parser.cpp
+    src/clients/ingest_client.cpp
+    src/clients/annotate_client.cpp
+    src/clients/query_client.cpp
+    src/parsers/PacketParser.cpp
+    src/parsers/h5_parser.cpp
+    src/parsers/mongo_to_npy_parser.cpp
+    src/parsers/data_decoder.cpp
 )
 
 #
@@ -56,6 +61,8 @@ set(COMMON_SOURCES
 #
 add_executable(h5_to_dp apps/h5_to_dp.cpp ${COMMON_SOURCES})
 add_executable(mongo_to_npy apps/mongo_to_npy.cpp ${COMMON_SOURCES})
+add_executable(data_decoder apps/data_decoder.cpp ${COMMON_SOURCES})
+
 #
 # Link Libraries
 #
@@ -75,25 +82,39 @@ set(COMMON_LIBRARIES
 
 target_link_libraries(h5_to_dp PRIVATE ${COMMON_LIBRARIES})
 target_link_libraries(mongo_to_npy PRIVATE ${COMMON_LIBRARIES})
+target_link_libraries(data_decoder PRIVATE ${COMMON_LIBRARIES})
 
 #
 # Target Include Directories
 #
-target_include_directories(h5_to_dp PRIVATE 
+target_include_directories(h5_to_dp PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/clients
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/parsers
     ${CMAKE_BINARY_DIR}/proto
     ${HDF5_INCLUDE_DIRS}
 )
-target_include_directories(mongo_to_npy PRIVATE 
+
+target_include_directories(mongo_to_npy PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/clients
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/parsers
+    ${CMAKE_BINARY_DIR}/proto
+    ${HDF5_INCLUDE_DIRS}
+)
+
+target_include_directories(data_decoder PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include 
-    ${CMAKE_BINARY_DIR}/proto 
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/clients
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/parsers
+    ${CMAKE_BINARY_DIR}/proto
     ${HDF5_INCLUDE_DIRS}
 )
 
 #
 # Install Scripts
 #
-install(PROGRAMS 
-    scripts/stub_h5 
+install(PROGRAMS
+    scripts/stub_h5
     DESTINATION bin
 )

@@ -34,7 +34,7 @@ public:
 
     void showHelp()
     {
-        std::cout << "ENHANCED LCLS DATA PLATFORM CLI TOOLKIT\n";
+        std::cout << "DATA PROVIDER CLI TOOLKIT\n";
         std::cout << "=======================================\n\n";
         std::cout << "USAGE:\n";
         std::cout << "  DataProvider_CLI <command> [options]\n\n";
@@ -48,22 +48,323 @@ public:
         std::cout << "  monitor <pv>            Real-time monitoring\n";
         std::cout << "  analyze <pvs>           Data analysis\n";
         std::cout << "  tools [tool]            Show tools help (decode/export/ingest)\n";
+        std::cout << "  examples [command]      Show examples (general or command-specific)\n";
         std::cout << "  help                    Show this help\n\n";
-        std::cout << "EXAMPLES:\n";
-        std::cout << "  DataProvider_CLI discover \".*BPM.*\"\n";
-        std::cout << "  DataProvider_CLI view BPMS_DMPH_502_TMITBR --last 1h\n";
-        std::cout << "  DataProvider_CLI export \".*TMIT.*\" --pytorch\n";
-        std::cout << "  DataProvider_CLI ingest /data/h5_files/ --project CoAD\n";
-        std::cout << "  DataProvider_CLI decode PV_NAME --csv data.csv    # Saves to exports/csv/\n";
-        std::cout << "  DataProvider_CLI export discover                  # Saves to exports/numpy/\n";
-        std::cout << "  DataProvider_CLI tools                    # List all tools\n";
-        std::cout << "  DataProvider_CLI tools decode             # Show data_decoder help\n\n";
+        std::cout << "QUICK START:\n";
+        std::cout << "  DataProvider_CLI examples           # See all examples\n";
+        std::cout << "  DataProvider_CLI examples discover  # Examples for discover command\n";
+        std::cout << "  DataProvider_CLI discover \".*BPM.*\" # Find all BPM PVs\n\n";
         std::cout << "OUTPUT LOCATIONS:\n";
         std::cout << "  CSV files:     build/exports/csv/\n";
         std::cout << "  JSON files:    build/exports/json/\n";
         std::cout << "  NumPy files:   build/exports/numpy/\n";
         std::cout << "  PyTorch data:  build/exports/pytorch/\n";
         std::cout << "  HDF5 files:    build/exports/hdf5/\n";
+    }
+
+    void showGeneralExamples()
+    {
+        std::cout << "LCLS DATA PROVIDER CLI - COMPLETE EXAMPLES\n";
+        std::cout << "==========================================\n\n";
+        
+        std::cout << "=== IMPORTANT: HISTORICAL DATA TIMESTAMPS ===\n";
+        std::cout << "Your MongoDB contains historical data from June 23, 2025.\n";
+        std::cout << "Use these timestamps for queries:\n";
+        std::cout << "  --start 1750690485 --end 1750706894 --no-serialized\n";
+        std::cout << "  (June 23, 2025 14:54:45 to 19:28:14 UTC)\n\n";
+        
+        std::cout << "=== DISCOVERY EXAMPLES ===\n";
+        std::cout << "# Find all available PVs\n";
+        std::cout << "DataProvider_CLI discover\n\n";
+        
+        std::cout << "# Find all BPM (Beam Position Monitor) PVs\n";
+        std::cout << "DataProvider_CLI discover \".*BPM.*\"\n\n";
+        
+        std::cout << "# Find all charge monitors (TMIT)\n";
+        std::cout << "DataProvider_CLI discover \".*TMIT.*\"\n\n";
+        
+        std::cout << "# Find all PVs in sector LI20\n";
+        std::cout << "DataProvider_CLI discover \".*LI20.*\"\n\n";
+        
+        std::cout << "# Find X-axis measurements\n";
+        std::cout << "DataProvider_CLI discover \".*_X.*\"\n\n";
+        
+        std::cout << "=== VIEWING DATA EXAMPLES ===\n";
+        std::cout << "# Quick view of a PV (using historical data range)\n";
+        std::cout << "DataProvider_CLI view BPMS_DMPH_502_TMITBR --start 1750690485 --end 1750706894 --no-serialized\n\n";
+        
+        std::cout << "# View with shorter time range (30 minutes)\n";
+        std::cout << "DataProvider_CLI view KLYS_LI23_31_AMPL --start 1750690485 --end 1750692285 --no-serialized\n\n";
+        
+        std::cout << "=== DATA DECODING EXAMPLES ===\n";
+        std::cout << "# Decode a single PV (with historical timestamps)\n";
+        std::cout << "DataProvider_CLI decode BPMS_DMPH_502_TMITBR --start 1750690485 --end 1750706894 --no-serialized\n\n";
+        
+        std::cout << "# Decode multiple PVs\n";
+        std::cout << "DataProvider_CLI decode BPMS_DMPH_502_TMITBR,KLYS_LI23_31_AMPL --start 1750690485 --end 1750706894 --no-serialized\n\n";
+        
+        std::cout << "# Decode and export to CSV\n";
+        std::cout << "DataProvider_CLI decode BPMS_DMPH_502_TMITBR --start 1750690485 --end 1750706894 --no-serialized --csv bpm_data.csv\n";
+        std::cout << "# Output: build/exports/csv/bpm_data.csv\n\n";
+        
+        std::cout << "# Decode all TMIT PVs and export to JSON\n";
+        std::cout << "DataProvider_CLI decode \".*TMIT.*\" --start 1750690485 --end 1750706894 --no-serialized --json tmit_analysis.json\n";
+        std::cout << "# Output: build/exports/json/tmit_analysis.json\n\n";
+        
+        std::cout << "=== ML/NUMPY EXPORT EXAMPLES ===\n";
+        std::cout << "# Export all available PVs for ML (uses historical data automatically)\n";
+        std::cout << "DataProvider_CLI export discover\n";
+        std::cout << "# Output: build/exports/numpy/\n\n";
+        
+        std::cout << "# Export specific PV pattern for PyTorch\n";
+        std::cout << "DataProvider_CLI export export-pattern \".*BPM.*\"\n\n";
+        
+        std::cout << "# Export specific PVs by name\n";
+        std::cout << "DataProvider_CLI export export-pvs BPMS_DMPH_502_TMITBR,KLYS_LI23_31_AMPL\n\n";
+        
+        std::cout << "# Export for time series ML (LSTM)\n";
+        std::cout << "DataProvider_CLI export export-timeseries \".*BPM.*\" 100\n\n";
+        
+        std::cout << "=== DATA INGESTION EXAMPLES ===\n";
+        std::cout << "# Ingest H5 files from directory\n";
+        std::cout << "DataProvider_CLI ingest /data/h5_files/\n\n";
+        
+        std::cout << "# Ingest with specific project filter\n";
+        std::cout << "DataProvider_CLI ingest /data/h5_files/ --project CoAD\n\n";
+        
+        std::cout << "# Ingest with device filter\n";
+        std::cout << "DataProvider_CLI ingest /data/h5_files/ --device BPMS\n\n";
+        
+        std::cout << "# Dry run (parse only, don't ingest)\n";
+        std::cout << "DataProvider_CLI ingest /data/h5_files/ --local-only\n\n";
+        
+        std::cout << "=== MONITORING EXAMPLES ===\n";
+        std::cout << "# Real-time monitoring (Note: uses historical data timestamps)\n";
+        std::cout << "DataProvider_CLI monitor BPMS_DMPH_502_TMITBR --start 1750690485 --end 1750706894 --no-serialized\n";
+        std::cout << "# Press Ctrl+C to stop\n\n";
+        
+        std::cout << "=== ANALYSIS EXAMPLES ===\n";
+        std::cout << "# Analyze multiple PVs (with correct timestamps)\n";
+        std::cout << "DataProvider_CLI analyze \"BPMS_DMPH_502_TMITBR,BPMS_LTUH_250_XBR\" --start 1750690485 --end 1750706894 --no-serialized\n\n";
+        
+        std::cout << "=== TOOL ACCESS EXAMPLES ===\n";
+        std::cout << "# Show all available tools\n";
+        std::cout << "DataProvider_CLI tools\n\n";
+        
+        std::cout << "# Get help for specific tool\n";
+        std::cout << "DataProvider_CLI tools decode\n";
+        std::cout << "DataProvider_CLI tools export\n";
+        std::cout << "DataProvider_CLI tools ingest\n\n";
+        
+        std::cout << "=== COMMON LCLS PV PATTERNS ===\n";
+        std::cout << ".*BPM.*           # All Beam Position Monitors\n";
+        std::cout << ".*TMIT.*          # All charge/transmission monitors\n";
+        std::cout << ".*KLYS.*          # All klystron/RF systems\n";
+        std::cout << ".*LTUH.*          # HXR transport line\n";
+        std::cout << ".*DMPH.*          # HXR dump line\n";
+        std::cout << ".*LI20.*          # Sector 20 devices\n";
+        std::cout << ".*_XBR$           # X-axis BPM readbacks\n";
+        std::cout << ".*_YBR$           # Y-axis BPM readbacks\n";
+        std::cout << ".*AMPL.*          # Amplitude measurements\n";
+        std::cout << ".*PHAS.*          # Phase measurements\n\n";
+        
+        std::cout << "=== WORKFLOW EXAMPLES ===\n";
+        std::cout << "# Complete workflow: Ingest → Discover → Export\n";
+        std::cout << "1. DataProvider_CLI ingest /data/h5_files/\n";
+        std::cout << "2. DataProvider_CLI discover \".*BPM.*\"\n";
+        std::cout << "3. DataProvider_CLI export export-pattern \".*BPM.*\"\n\n";
+        
+        std::cout << "# Analysis workflow: Discover → View → Decode → Export (with correct timestamps)\n";
+        std::cout << "1. DataProvider_CLI discover \".*TMIT.*\"\n";
+        std::cout << "2. DataProvider_CLI view BPMS_DMPH_502_TMITBR --start 1750690485 --end 1750706894 --no-serialized\n";
+        std::cout << "3. DataProvider_CLI decode BPMS_DMPH_502_TMITBR --start 1750690485 --end 1750706894 --no-serialized --csv results.csv\n";
+        std::cout << "4. DataProvider_CLI export export-pvs BPMS_DMPH_502_TMITBR\n\n";
+        
+        std::cout << "=== HISTORICAL DATA INFO ===\n";
+        std::cout << "Your MongoDB contains data from: June 23, 2025\n";
+        std::cout << "Start time: 1750690485 (14:54:45 UTC)\n";
+        std::cout << "End time:   1750706894 (19:28:14 UTC)\n";
+        std::cout << "Duration:   ~4.5 hours of LCLS data\n";
+        std::cout << "PVs:        1600+ process variables\n\n";
+        
+        std::cout << "Use --no-serialized flag to avoid serialization issues.\n";
+        std::cout << "Always specify --start and --end for data queries.\n\n";
+    }
+
+    void showCommandExamples(const std::string& command)
+    {
+        if (command == "discover") {
+            std::cout << "DISCOVER COMMAND EXAMPLES\n";
+            std::cout << "========================\n\n";
+            std::cout << "Basic discovery:\n";
+            std::cout << "  DataProvider_CLI discover                    # All PVs\n";
+            std::cout << "  DataProvider_CLI discover \".*\"              # All PVs (explicit)\n\n";
+            
+            std::cout << "Device-based patterns:\n";
+            std::cout << "  DataProvider_CLI discover \".*BPM.*\"         # Beam Position Monitors\n";
+            std::cout << "  DataProvider_CLI discover \".*KLYS.*\"        # Klystrons\n";
+            std::cout << "  DataProvider_CLI discover \".*ACCL.*\"        # Accelerator components\n";
+            std::cout << "  DataProvider_CLI discover \".*BEND.*\"        # Bending magnets\n";
+            std::cout << "  DataProvider_CLI discover \".*QUAD.*\"        # Quadrupole magnets\n\n";
+            
+            std::cout << "Location-based patterns:\n";
+            std::cout << "  DataProvider_CLI discover \".*LI20.*\"        # Sector 20\n";
+            std::cout << "  DataProvider_CLI discover \".*DMPH.*\"        # HXR dump line\n";
+            std::cout << "  DataProvider_CLI discover \".*LTUH.*\"        # HXR transport\n";
+            std::cout << "  DataProvider_CLI discover \".*GUNB.*\"        # Gun/Buncher area\n\n";
+            
+            std::cout << "Measurement-based patterns:\n";
+            std::cout << "  DataProvider_CLI discover \".*TMIT.*\"        # Charge monitors\n";
+            std::cout << "  DataProvider_CLI discover \".*_X.*\"          # X-axis measurements\n";
+            std::cout << "  DataProvider_CLI discover \".*_Y.*\"          # Y-axis measurements\n";
+            std::cout << "  DataProvider_CLI discover \".*AMPL.*\"        # Amplitude measurements\n";
+            std::cout << "  DataProvider_CLI discover \".*PHAS.*\"        # Phase measurements\n\n";
+            
+        } else if (command == "view") {
+            std::cout << "VIEW COMMAND EXAMPLES\n";
+            std::cout << "====================\n\n";
+            std::cout << "Basic viewing:\n";
+            std::cout << "  DataProvider_CLI view BPMS_DMPH_502_TMITBR           # Last hour (default)\n";
+            std::cout << "  DataProvider_CLI view KLYS_LI23_31_AMPL              # Last hour\n\n";
+            
+            std::cout << "Time range options:\n";
+            std::cout << "  DataProvider_CLI view BPMS_DMPH_502_TMITBR --last 30m    # Last 30 minutes\n";
+            std::cout << "  DataProvider_CLI view BPMS_DMPH_502_TMITBR --last 2h     # Last 2 hours\n";
+            std::cout << "  DataProvider_CLI view BPMS_DMPH_502_TMITBR --last 1d     # Last day\n\n";
+            
+        } else if (command == "decode") {
+            std::cout << "DECODE COMMAND EXAMPLES\n";
+            std::cout << "======================\n\n";
+            std::cout << "Basic decoding:\n";
+            std::cout << "  DataProvider_CLI decode BPMS_DMPH_502_TMITBR         # Display decoded data\n";
+            std::cout << "  DataProvider_CLI decode KLYS_LI23_31_AMPL            # RF amplitude data\n\n";
+            
+            std::cout << "Multiple PVs:\n";
+            std::cout << "  DataProvider_CLI decode BPMS_DMPH_502_TMITBR,KLYS_LI23_31_AMPL\n";
+            std::cout << "  DataProvider_CLI decode \"PV1,PV2,PV3\"               # Quote for safety\n\n";
+            
+            std::cout << "Export options:\n";
+            std::cout << "  DataProvider_CLI decode BPMS_DMPH_502_TMITBR --csv bpm_data.csv\n";
+            std::cout << "  DataProvider_CLI decode KLYS_LI23_31_AMPL --json rf_data.json\n";
+            std::cout << "  DataProvider_CLI decode \".*TMIT.*\" --csv all_tmit.csv --json all_tmit.json\n\n";
+            
+            std::cout << "Output locations:\n";
+            std::cout << "  CSV files:  build/exports/csv/\n";
+            std::cout << "  JSON files: build/exports/json/\n\n";
+            
+        } else if (command == "export") {
+            std::cout << "EXPORT COMMAND EXAMPLES\n";
+            std::cout << "======================\n\n";
+            std::cout << "Discovery export:\n";
+            std::cout << "  DataProvider_CLI export discover                    # Export all found PVs\n\n";
+            
+            std::cout << "Pattern-based export:\n";
+            std::cout << "  DataProvider_CLI export export-pattern \".*BPM.*\"   # All BPM data\n";
+            std::cout << "  DataProvider_CLI export export-pattern \".*TMIT.*\"  # All charge monitors\n";
+            std::cout << "  DataProvider_CLI export export-pattern \".*LI20.*\"  # Sector 20 data\n\n";
+            
+            std::cout << "Specific PVs export:\n";
+            std::cout << "  DataProvider_CLI export export-pvs BPMS_DMPH_502_TMITBR\n";
+            std::cout << "  DataProvider_CLI export export-pvs PV1,PV2,PV3\n\n";
+            
+            std::cout << "ML-specific exports:\n";
+            std::cout << "  DataProvider_CLI export export-timeseries \".*BPM.*\" 50   # LSTM sequences\n";
+            std::cout << "  DataProvider_CLI export export-timeseries \".*BPM.*\" 100  # Longer sequences\n";
+            std::cout << "  DataProvider_CLI export export-dataset \".*GCC.*\" gas_chambers\n\n";
+            
+            std::cout << "Output: build/exports/numpy/\n";
+            std::cout << "  - <name>_data.npy         # Main data matrix\n";
+            std::cout << "  - <name>_timestamps.npy   # Timestamps\n";
+            std::cout << "  - <name>_loader.py        # PyTorch loader\n\n";
+            
+        } else if (command == "ingest") {
+            std::cout << "INGEST COMMAND EXAMPLES\n";
+            std::cout << "======================\n\n";
+            std::cout << "Basic ingestion:\n";
+            std::cout << "  DataProvider_CLI ingest /path/to/h5/files/           # All H5 files\n";
+            std::cout << "  DataProvider_CLI ingest /data/lcls_data/             # Production data\n\n";
+            
+            std::cout << "Filtered ingestion:\n";
+            std::cout << "  DataProvider_CLI ingest /data/h5/ --project CoAD     # Specific project\n";
+            std::cout << "  DataProvider_CLI ingest /data/h5/ --device BPMS      # Only BPM devices\n";
+            std::cout << "  DataProvider_CLI ingest /data/h5/ --device-area LI20 # Sector 20 only\n";
+            std::cout << "  DataProvider_CLI ingest /data/h5/ --max-signals 100  # Limit signals\n\n";
+            
+            std::cout << "Ingestion modes:\n";
+            std::cout << "  DataProvider_CLI ingest /data/h5/ --streaming         # Use streaming\n";
+            std::cout << "  DataProvider_CLI ingest /data/h5/ --batch-size 20     # Custom batch size\n";
+            std::cout << "  DataProvider_CLI ingest /data/h5/ --local-only        # Parse only (no MongoDB)\n\n";
+            
+            std::cout << "Show available filters:\n";
+            std::cout << "  DataProvider_CLI ingest /data/h5/ --show-filters      # See filter options\n\n";
+            
+        } else if (command == "monitor") {
+            std::cout << "MONITOR COMMAND EXAMPLES\n";
+            std::cout << "=======================\n\n";
+            std::cout << "Basic monitoring (using historical data range):\n";
+            std::cout << "  DataProvider_CLI monitor BPMS_DMPH_502_TMITBR --start 1750690485 --end 1750706894 --no-serialized\n";
+            std::cout << "  DataProvider_CLI monitor KLYS_LI23_31_AMPL --start 1750690485 --end 1750706894 --no-serialized\n\n";
+            
+            std::cout << "Note: Press Ctrl+C to stop monitoring\n";
+            std::cout << "Output format: [HH:MM:SS] - PV_NAME: value\n";
+            std::cout << "IMPORTANT: Use historical timestamps since data is from June 23, 2025\n\n";
+            
+        } else if (command == "analyze") {
+            std::cout << "ANALYZE COMMAND EXAMPLES\n";
+            std::cout << "=======================\n\n";
+            std::cout << "Single PV analysis (with historical timestamps):\n";
+            std::cout << "  DataProvider_CLI analyze BPMS_DMPH_502_TMITBR --start 1750690485 --end 1750706894 --no-serialized\n\n";
+            
+            std::cout << "Multiple PV analysis:\n";
+            std::cout << "  DataProvider_CLI analyze \"BPMS_DMPH_502_TMITBR,KLYS_LI23_31_AMPL\" --start 1750690485 --end 1750706894 --no-serialized\n";
+            std::cout << "  DataProvider_CLI analyze \"PV1,PV2,PV3\" --start 1750690485 --end 1750706894 --no-serialized\n\n";
+            
+            std::cout << "Output includes:\n";
+            std::cout << "  - Data point counts\n";
+            std::cout << "  - Min/Max/Mean values\n";
+            std::cout << "  - Value ranges\n";
+            std::cout << "  - Statistical summary\n\n";
+            
+            std::cout << "REMEMBER: Your data is historical (June 23, 2025)\n";
+            std::cout << "Always use: --start 1750690485 --end 1750706894 --no-serialized\n\n";
+            
+        } else if (command == "tools") {
+            std::cout << "TOOLS COMMAND EXAMPLES\n";
+            std::cout << "=====================\n\n";
+            std::cout << "Show all tools:\n";
+            std::cout << "  DataProvider_CLI tools                              # List all tools\n\n";
+            
+            std::cout << "Get tool-specific help:\n";
+            std::cout << "  DataProvider_CLI tools decode                       # data_decoder help\n";
+            std::cout << "  DataProvider_CLI tools export                       # mongo_to_npy help\n";
+            std::cout << "  DataProvider_CLI tools ingest                       # h5_to_dp help\n\n";
+            
+            std::cout << "Available tools:\n";
+            std::cout << "  - data_decoder: MongoDB data decoder and viewer\n";
+            std::cout << "  - mongo_to_npy: Export MongoDB data to NumPy/PyTorch format\n";
+            std::cout << "  - h5_to_dp: Ingest HDF5 files into MongoDB via MLDP\n\n";
+            
+        } else {
+            std::cout << "UNKNOWN COMMAND: " << command << "\n\n";
+            std::cout << "Available commands for examples:\n";
+            std::cout << "  discover, view, decode, export, ingest, monitor, analyze, tools\n\n";
+            std::cout << "Usage: DataProvider_CLI examples [command]\n";
+            std::cout << "   or: DataProvider_CLI examples              # Show all examples\n\n";
+        }
+    }
+
+    int runExamples(const std::vector<std::string> &args)
+    {
+        if (args.size() < 2)
+        {
+            // Show all examples
+            showGeneralExamples();
+            return 0;
+        }
+
+        std::string command = args[1];
+        showCommandExamples(command);
+        return 0;
     }
 
     int runCommand(const std::vector<std::string> &args)
@@ -76,7 +377,11 @@ public:
 
         std::string command = args[0];
 
-        if (command == "discover")
+        if (command == "examples")
+        {
+            return runExamples(args);
+        }
+        else if (command == "discover")
         {
             return runDiscover(args);
         }
@@ -190,23 +495,45 @@ private:
     {
         if (args.size() < 2)
         {
-            std::cerr << "Usage: DataProvider_CLI view <pv> [time_range]" << std::endl;
+            std::cerr << "Usage: DataProvider_CLI view <pv> [options]" << std::endl;
+            std::cerr << "  Options: --start <timestamp> --end <timestamp> --no-serialized" << std::endl;
+            std::cerr << "  Example: DataProvider_CLI view BPMS_DMPH_502_TMITBR --start 1750690485 --end 1750706894 --no-serialized" << std::endl;
             return 1;
         }
 
         std::string pv = args[1];
-        std::string timeRange = args.size() > 2 ? args[2] : "last 1h";
 
-        std::cout << "Viewing data for PV: " << pv << " (" << timeRange << ")" << std::endl;
+        // Parse arguments for timestamps and options
+        uint64_t start_time = 1750690485;  // Default to historical data start
+        uint64_t end_time = 1750706894;    // Default to historical data end
+        bool use_serialized = true;
+
+        for (size_t i = 2; i < args.size(); ++i)
+        {
+            if (args[i] == "--start" && i + 1 < args.size())
+            {
+                start_time = std::stoull(args[i + 1]);
+                i++;
+            }
+            else if (args[i] == "--end" && i + 1 < args.size())
+            {
+                end_time = std::stoull(args[i + 1]);
+                i++;
+            }
+            else if (args[i] == "--no-serialized")
+            {
+                use_serialized = false;
+            }
+        }
+
+        std::cout << "Viewing data for PV: " << pv << std::endl;
+        std::cout << "Time range: " << start_time << " to " << end_time 
+                  << " (June 23, 2025)" << std::endl;
+        std::cout << "Serialized: " << (use_serialized ? "yes" : "no") << std::endl;
 
         try
         {
             QueryClient queryClient(config_["query_server"]);
-
-            // Calculate time range (simplified - use last hour for now)
-            uint64_t now = std::chrono::system_clock::now().time_since_epoch() / std::chrono::seconds(1);
-            uint64_t start_time = now - 3600; // 1 hour ago
-            uint64_t end_time = now;
 
             // Create timestamps
             auto begin_time = makeTimestamp(start_time, 0);
@@ -214,7 +541,7 @@ private:
 
             // Query data for the PV
             std::vector<std::string> pv_names = {pv};
-            auto request = makeQueryDataRequest(pv_names, begin_time, end_time_ts, false);
+            auto request = makeQueryDataRequest(pv_names, begin_time, end_time_ts, use_serialized);
             auto response = queryClient.queryData(request);
 
             if (response.has_exceptionalresult())
@@ -374,7 +701,9 @@ private:
     {
         if (args.size() < 2)
         {
-            std::cerr << "Usage: DataProvider_CLI decode <pv>" << std::endl;
+            std::cerr << "Usage: DataProvider_CLI decode <pv> [options]" << std::endl;
+            std::cerr << "  Options: --start <timestamp> --end <timestamp> --no-serialized --csv <file> --json <file>" << std::endl;
+            std::cerr << "  Example: DataProvider_CLI decode BPMS_DMPH_502_TMITBR --start 1750690485 --end 1750706894 --no-serialized --csv data.csv" << std::endl;
             return 1;
         }
 
@@ -382,10 +711,57 @@ private:
         std::string cmd = getToolPath("data_decoder");
         cmd += " decode";
 
+        // Parse arguments for timestamps and options
+        uint64_t start_time = 1750690485;  // Default to historical data start
+        uint64_t end_time = 1750706894;    // Default to historical data end
+        bool use_serialized = true;
+        bool has_custom_timestamps = false;
+
+        // First pass: check for custom timestamps and flags
+        for (size_t i = 1; i < args.size(); ++i)
+        {
+            std::string arg = args[i];
+            if (arg == "--start" && i + 1 < args.size())
+            {
+                start_time = std::stoull(args[i + 1]);
+                has_custom_timestamps = true;
+                i++;
+            }
+            else if (arg == "--end" && i + 1 < args.size())
+            {
+                end_time = std::stoull(args[i + 1]);
+                has_custom_timestamps = true;
+                i++;
+            }
+            else if (arg == "--no-serialized")
+            {
+                use_serialized = false;
+            }
+        }
+
+        // Add timestamps to command
+        cmd += " --start " + std::to_string(start_time);
+        cmd += " --end " + std::to_string(end_time);
+        if (!use_serialized)
+        {
+            cmd += " --no-serialized";
+        }
+
         // Process arguments and handle file outputs
         for (size_t i = 1; i < args.size(); ++i)
         {
             std::string arg = args[i];
+
+            // Skip timestamp arguments (already processed)
+            if (arg == "--start" || arg == "--end")
+            {
+                i++; // Skip the value too
+                continue;
+            }
+            if (arg == "--no-serialized")
+            {
+                continue; // Already added
+            }
 
             // Handle CSV output
             if (arg == "--csv" && i + 1 < args.size())
@@ -409,7 +785,10 @@ private:
             }
         }
 
-        std::cout << "Executing: " << cmd << std::endl;
+        std::cout << "Executing decode with historical timestamps..." << std::endl;
+        std::cout << "Time range: " << start_time << " to " << end_time << " (June 23, 2025)" << std::endl;
+        std::cout << "Command: " << cmd << std::endl;
+
         int result = system(cmd.c_str());
 
         if (result == 0)
@@ -611,13 +990,40 @@ private:
     {
         if (args.size() < 2)
         {
-            std::cerr << "Usage: DataProvider_CLI analyze <pvs>" << std::endl;
-            std::cerr << "  Example: DataProvider_CLI analyze \"BPMS_DMPH_502_TMITBR,BPMS_LTUH_250_XBR\"" << std::endl;
+            std::cerr << "Usage: DataProvider_CLI analyze <pvs> [options]" << std::endl;
+            std::cerr << "  Options: --start <timestamp> --end <timestamp> --no-serialized" << std::endl;
+            std::cerr << "  Example: DataProvider_CLI analyze \"BPMS_DMPH_502_TMITBR,BPMS_LTUH_250_XBR\" --start 1750690485 --end 1750706894 --no-serialized" << std::endl;
             return 1;
         }
 
         std::string pv_list = args[1];
+
+        // Parse arguments for timestamps and options
+        uint64_t start_time = 1750690485;  // Default to historical data start
+        uint64_t end_time = 1750706894;    // Default to historical data end
+        bool use_serialized = true;
+
+        for (size_t i = 2; i < args.size(); ++i)
+        {
+            if (args[i] == "--start" && i + 1 < args.size())
+            {
+                start_time = std::stoull(args[i + 1]);
+                i++;
+            }
+            else if (args[i] == "--end" && i + 1 < args.size())
+            {
+                end_time = std::stoull(args[i + 1]);
+                i++;
+            }
+            else if (args[i] == "--no-serialized")
+            {
+                use_serialized = false;
+            }
+        }
+
         std::cout << "Running data analysis for PVs: " << pv_list << std::endl;
+        std::cout << "Time range: " << start_time << " to " << end_time << " (June 23, 2025)" << std::endl;
+        std::cout << "Serialized: " << (use_serialized ? "yes" : "no") << std::endl;
 
         try
         {
@@ -644,14 +1050,11 @@ private:
                 return 1;
             }
 
-            // Get last hour of data
-            uint64_t now = std::chrono::system_clock::now().time_since_epoch() / std::chrono::seconds(1);
-            uint64_t start_time = now - 3600; // 1 hour ago
-
+            // Use the parsed timestamps
             auto begin_time = makeTimestamp(start_time, 0);
-            auto end_time = makeTimestamp(now, 0);
+            auto end_time_ts = makeTimestamp(end_time, 0);
 
-            auto request = makeQueryDataRequest(pv_names, begin_time, end_time, false);
+            auto request = makeQueryDataRequest(pv_names, begin_time, end_time_ts, use_serialized);
             auto response = queryClient.queryData(request);
 
             if (response.has_exceptionalresult())
@@ -664,7 +1067,7 @@ private:
             {
                 const auto &query_data = response.querydata();
                 std::cout << "\n=== Data Analysis Results ===" << std::endl;
-                std::cout << "Time range: Last 1 hour" << std::endl;
+                std::cout << "Time range: " << start_time << " to " << end_time << std::endl;
                 std::cout << "PVs analyzed: " << pv_names.size() << std::endl;
                 std::cout << "Data buckets found: " << query_data.databuckets_size() << std::endl;
 
@@ -712,18 +1115,56 @@ private:
 
                             if (!values.empty())
                             {
-                                auto minmax = std::minmax_element(values.begin(), values.end());
-                                double sum = std::accumulate(values.begin(), values.end(), 0.0);
-                                double mean = sum / values.size();
+                                // Filter out NaN and infinite values for statistics
+                                std::vector<double> valid_values;
+                                size_t invalid_count = 0;
+                                
+                                for (double val : values) {
+                                    if (std::isfinite(val) && !std::isnan(val)) {
+                                        valid_values.push_back(val);
+                                    } else {
+                                        invalid_count++;
+                                    }
+                                }
+                                
+                                std::cout << "  Total values: " << values.size() << std::endl;
+                                if (invalid_count > 0) {
+                                    std::cout << "  Invalid values (NaN/Inf): " << invalid_count << std::endl;
+                                    std::cout << "  Valid values: " << valid_values.size() << std::endl;
+                                }
+                                
+                                if (!valid_values.empty()) {
+                                    auto minmax = std::minmax_element(valid_values.begin(), valid_values.end());
+                                    double sum = std::accumulate(valid_values.begin(), valid_values.end(), 0.0);
+                                    double mean = sum / valid_values.size();
+                                    
+                                    // Calculate standard deviation
+                                    double sq_sum = 0.0;
+                                    for (double val : valid_values) {
+                                        sq_sum += (val - mean) * (val - mean);
+                                    }
+                                    double std_dev = std::sqrt(sq_sum / valid_values.size());
 
-                                std::cout << "  Min: " << *minmax.first << std::endl;
-                                std::cout << "  Max: " << *minmax.second << std::endl;
-                                std::cout << "  Mean: " << mean << std::endl;
-                                std::cout << "  Range: " << (*minmax.second - *minmax.first) << std::endl;
+                                    std::cout << "  Min: " << std::scientific << std::setprecision(3) << *minmax.first << std::endl;
+                                    std::cout << "  Max: " << std::scientific << std::setprecision(3) << *minmax.second << std::endl;
+                                    std::cout << "  Mean: " << std::scientific << std::setprecision(3) << mean << std::endl;
+                                    std::cout << "  Std Dev: " << std::scientific << std::setprecision(3) << std_dev << std::endl;
+                                    std::cout << "  Range: " << std::scientific << std::setprecision(3) << (*minmax.second - *minmax.first) << std::endl;
+                                    
+                                    // Show data quality
+                                    double valid_percentage = (double)valid_values.size() / values.size() * 100.0;
+                                    std::cout << "  Data Quality: " << std::fixed << std::setprecision(1) << valid_percentage << "% valid" << std::endl;
+                                } else {
+                                    std::cout << "  ERROR: All values are NaN or infinite!" << std::endl;
+                                }
                             }
                         }
                     }
                 }
+            }
+            else
+            {
+                std::cout << "No data returned from query" << std::endl;
             }
         }
         catch (const std::exception &e)

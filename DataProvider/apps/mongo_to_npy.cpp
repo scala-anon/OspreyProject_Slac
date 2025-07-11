@@ -106,14 +106,102 @@ int main(int argc, char* argv[]) {
             
             std::cout << "\nFound " << all_pvs.size() << " total PVs" << std::endl;
             
-            // Show patterns
+            // Enhanced PV patterns based on LCLS-II Physics Requirements Document
             std::vector<std::pair<std::string, std::string>> patterns = {
+                // Existing patterns
                 {".*BPM.*", "Beam Position Monitors"},
                 {".*GCC.*", "Gas Cell Chambers"},
                 {".*ACCL.*", "Accelerator components"},
                 {".*BLD.*", "Beam Line Data"},
                 {".*-X.*", "X-axis measurements"},
-                {".*-Y.*", "Y-axis measurements"}
+                {".*-Y.*", "Y-axis measurements"},
+                
+                // LCLS-II Beamline Area Patterns
+                {".*GUNB.*", "Gun/Buncher Area (Cathode to L0B)"},
+                {".*L0B.*", "L0B Linac (Cryomodule CM01)"},
+                {".*HTR.*", "Heater/Emittance Measurement"},
+                {".*DIAG0.*", "Post-Laser-Heater Diagnostics"},
+                {".*COL0.*|.*COL1.*", "Collimation Sections"},
+                {".*L1B.*", "L1B Linac (Cryomodules CM02-03)"},
+                {".*L2B.*", "L2B Linac (Cryomodules CM04-15)"},
+                {".*L3B.*", "L3B Linac (Cryomodules CM16-35)"},
+                {".*BC1B.*|.*BC2B.*", "Bunch Compressors"},
+                {".*EMIT2.*", "Post-BC2 Emittance Diagnostics"},
+                {".*EXT.*", "Linac Extension"},
+                {".*DOG.*", "Dogleg Extraction"},
+                {".*BYP.*", "PEP-II e- Bypass Line"},
+                {".*SPH.*|.*SPS.*", "Spreader Systems (HXR/SXR)"},
+                {".*SLTH.*|.*SLTS.*", "Spreader BSY Lines"},
+                {".*BSYS.*|.*BSYH.*", "BSY Merger Areas"},
+                {".*LTUS.*|.*LTUH.*", "Transport Lines (SXR/HXR)"},
+                {".*UNDS.*|.*UNDH.*", "Undulator Areas (SXR/HXR)"},
+                {".*DMPS.*|.*DMPH.*", "Post-Undulator/Dump Lines"},
+                {".*SFTS.*|.*SFTH.*", "Safety Dump Lines"},
+                {".*SXTES.*|.*HXTES.*", "X-ray Transport/Experimental"},
+                {".*SPD.*", "BSY Dump Lines"},
+                {".*SLTD.*", "BSY Dump Transport"},
+                {".*DASEL.*", "End Station A Line"},
+                
+                // Copper Linac Legacy Areas
+                {".*GUN.*", "Copper Linac Gun"},
+                {".*GSPEC.*", "Gun Spectrometer"},
+                {".*L0.*", "L0 Linac (L0A + L0B)"},
+                {".*DL1.*", "Laser Heater + Diagnostics"},
+                {".*SPEC.*", "135 MeV Spectrometer"},
+                {".*L1.*", "L1 Linac (L1S)"},
+                {".*BC1.*|.*BC2.*", "Copper Linac Bunch Compressors"},
+                {".*L2.*|.*L3.*", "L2/L3 Linac"},
+                {".*CLTH.*|.*CLTS.*", "Copper Linac to Transport"},
+                {".*BSYA.*", "BSY to A-line"},
+                
+                // Sector-based Patterns
+                {".*S00.*|.*S[0-2][0-9].*|.*S30.*", "SLAC Linac Sectors (S00-S30)"},
+                {".*BPN[0-2][0-9].*", "Bypass Line Sectors"},
+                {".*BSY.*", "Beam Switch Yard"},
+                {".*[7-8][0-9]S.*", "SXR Transport Sectors (71S-82S)"},
+                {".*U0[1-4]S.*", "SXR Undulator Sectors"},
+                {".*[9][0-2]S.*", "SXR End Station Sectors"},
+                {".*[7-8][0-9]H.*", "HXR Transport Sectors (71H-82H)"},
+                {".*U0[1-4]H.*", "HXR Undulator Sectors"},
+                {".*[9][0-2]H.*", "HXR End Station Sectors"},
+                {".*XTESS.*|.*XTESH.*", "X-ray Experimental Stations"},
+                {".*ALINE.*", "A-line Experimental Area"},
+                
+                // Device Type Patterns
+                {".*QUAD.*|.*Q[A-Z].*", "Quadrupole Magnets"},
+                {".*BEND.*|.*B[XY].*", "Bending Magnets"},
+                {".*CORR.*", "Corrector Magnets"},
+                {".*TORO.*|.*TMIT.*", "Toroids/Current Monitors"},
+                {".*WIRE.*|.*WS.*", "Wire Scanners"},
+                {".*YAG.*", "YAG Screens"},
+                {".*CAMR.*|.*CAM.*", "Cameras"},
+                {".*KLYS.*|.*SBST.*", "Klystrons/RF Systems"},
+                {".*TCAV.*", "Transverse Cavities"},
+                {".*MOTO.*|.*PICO.*", "Motors/Actuators"},
+                {".*VALVE.*|.*VGC.*", "Vacuum Valves/Gauges"},
+                {".*TEMP.*|.*RTD.*", "Temperature Monitors"},
+                {".*PRES.*", "Pressure Monitors"},
+                {".*FLOW.*", "Flow Monitors"},
+                {".*MIRROR.*|.*MR[0-9].*", "X-ray Mirrors"},
+                {".*MONO.*", "Monochromators"},
+                {".*SLIT.*", "Beam Slits"},
+                {".*DUMP.*", "Beam Dumps"},
+                {".*STOP.*|.*STOPPER.*", "Beam Stoppers"},
+                {".*SHUTTER.*", "Shutters"},
+                
+                // Measurement Type Patterns
+                {".*ENERGY.*|.*EDES.*", "Energy Measurements"},
+                {".*PHASE.*|.*PDES.*", "Phase Measurements"},
+                {".*AMPL.*|.*AACT.*", "Amplitude Measurements"},
+                {".*BACT.*", "Actual B-field Readings"},
+                {".*BDES.*", "Desired B-field Settings"},
+                {".*TMIT.*", "Transmitted Charge"},
+                {".*EDES.*", "Energy Setpoints"},
+                {".*EACT.*", "Energy Readbacks"},
+                {".*POS.*", "Position Measurements"},
+                {".*STATUS.*|.*STAT.*", "Status Indicators"},
+                {".*CTRL.*", "Control Signals"},
+                {".*HEARTBEAT.*", "Heartbeat/Alive Signals"}
             };
             
             std::cout << "\nPV PATTERNS:" << std::endl;

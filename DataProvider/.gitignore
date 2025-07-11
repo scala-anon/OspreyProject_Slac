@@ -1,1 +1,68 @@
+# DataProvider level .gitignore
+
+# Build directories - completely ignore these
 build/
+bin/
+exports/
+
+# CMake generated files (keep source CMakeLists.txt files)
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+*.cmake
+!CMakeLists.txt
+
+# Build artifacts
+*.o
+*.so
+*.a
+*.out
+*.exe
+
+# Generated protobuf files
+*.pb.cc
+*.pb.h
+*.grpc.pb.cc
+*.grpc.pb.h
+
+# Data export files (from decode operations)
+*.csv
+*.json
+*.xlsx
+*.h5
+*.hdf5
+
+# IDE and editor files
+.vscode/
+.idea/
+*.user
+*.swp
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs and temporary files
+logs/
+*.log
+*.tmp
+*.temp
+*~
+.#*
+
+# Python cache (if any Python tools are used)
+__pycache__/
+*.pyc
+*.pyo
+
+# Keep these important files:
+# - CMakeLists.txt (all of them)
+# - build_dp.sh
+# - verify_build.sh (if you have it)
+# - All source files in src/, include/, apps/
+# - All .proto files
+# - scripts/
+# - config/
+# - README.md

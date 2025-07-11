@@ -1,22 +1,7 @@
-# CMake build folders (fixed to match subdirectories too)
-build/
-**/build/
-CMakeFiles/
-**/CMakeFiles/
-cmake-build-*/
+# Root level .gitignore for OspreyProject_Slac/
 
-# Build artifacts
-*.o
-*.so
-*.a
-*.out
-*.exe
-
-# Generated proto files
-*.pb.cc
-*.pb.h
-*.grpc.pb.cc
-*.grpc.pb.h
+# Ignore the entire data-platform directory and all its contents
+data-platform/
 
 # IDE and editor files
 .vscode/
@@ -29,15 +14,18 @@ cmake-build-*/
 .DS_Store
 Thumbs.db
 
-# Logs or data
+# Logs or temporary data at root level
 logs/
+temp/
+tmp/
+
+# Any root-level data files
+*.csv
+*.json
+*.xlsx
+*.h5
+*.hdf5
 data/
 
-# Data Platform specific (merged from data-platform/.gitignore)
-dp-support/current
-dp-support/dp-support*
-lib/dp-service/*.jar
-var/log/*.log
-var/lock/*.pid
-data-platform.iml
-data-platform/
+# Keep DataProvider/ - it has its own .gitignore
+# Keep README.md and other documentation files

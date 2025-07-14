@@ -9,10 +9,6 @@
 #include <cmath>
 #include <limits>
 
-// =============================================================================
-// DecodedPVSeries Implementation
-// =============================================================================
-
 void DecodedPVSeries::calculateStats() {
     if (data_points.empty()) {
         total_points = 0;
@@ -63,15 +59,9 @@ std::vector<DecodedDataPoint> DecodedPVSeries::getDataInRange(
     return result;
 }
 
-// =============================================================================
-// DataDecoder Implementation
-// =============================================================================
-
 DataDecoder::DataDecoder(const std::string& server_address)
     : server_address_(server_address) {
     
-    // For now, use the existing QueryClient constructor
-    // TODO: The QueryClient needs to be updated to support larger message sizes
     query_client_ = std::make_unique<QueryClient>(server_address);
     
     std::cout << "Warning: Using default gRPC message size limits. "
@@ -188,7 +178,6 @@ std::vector<DecodedPVSeries> DataDecoder::decodeQueryResponse(const QueryDataRes
             pv_name = bucket.datacolumn().name();
         } else if (bucket.has_serializeddatacolumn()) {
             values = decodeSerializedDataColumn(bucket.serializeddatacolumn());
-            // SerializedDataColumn might not have name() method directly
             pv_name = "SerializedPV_" + std::to_string(decoded_series.size());
         }
         
@@ -523,9 +512,6 @@ std::string DataDecoder::formatDuration(std::chrono::seconds duration) const {
     return oss.str();
 }
 
-// =============================================================================
-// TimeUtils Implementation
-// =============================================================================
 
 uint64_t TimeUtils::getCurrentUnixTime() {
     return std::chrono::duration_cast<std::chrono::seconds>(

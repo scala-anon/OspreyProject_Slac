@@ -4,57 +4,60 @@ set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 set(CMAKE_CXX_STANDARD 17)
 
 #
-# Create bin directory in source tree for executables
+# Output directory setup
 #
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/bin)
-
-#
-# Set output directory for all executables to bin/ in source tree
-#
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/bin)
 
 #
-# Dependencies
+# Core dependencies (existing)
 #
 find_package(Protobuf REQUIRED)
 find_package(HDF5 REQUIRED COMPONENTS CXX)
 
-# Add user local paths
+#
+# Optional dependencies
+#
 set(CMAKE_PREFIX_PATH ${CMAKE_PREFIX_PATH} "$ENV{HOME}/local")
 
-# Try to find optional dependencies in user directories
+# JSON library (for EPICS parser)
 find_path(NLOHMANN_JSON_INCLUDE_DIR nlohmann/json.hpp
     PATHS $ENV{HOME}/local/include /usr/local/include /usr/include)
+
+# XlsxWriter (existing optional)
 find_library(XLSXWRITER_LIBRARY xlsxwriter
     PATHS $ENV{HOME}/local/lib /usr/local/lib /usr/lib64 /usr/lib)
 
+#
+# Feature flags and includes
+#
 if(NLOHMANN_JSON_INCLUDE_DIR)
-    message(STATUS "Found nlohmann/json: ${NLOHMANN_JSON_INCLUDE_DIR}")
     add_definitions(-DHAVE_NLOHMANN_JSON)
+    include_directories(${NLOHMANN_JSON_INCLUDE_DIR})
 endif()
 
 if(XLSXWRITER_LIBRARY)
-    message(STATUS "Found xlsxwriter: ${XLSXWRITER_LIBRARY}")
     add_definitions(-DHAVE_XLSXWRITER)
 endif()
 
-# Add subdirectory for proto files
-add_subdirectory(proto)
-
 #
-# Definitions and Include Directories
+# Include directories
 #
 add_definitions(-DH5_BUILT_AS_DYNAMIC_LIB)
 include_directories(/usr/include)
 include_directories(include)
-include_directories(${CMAKE_BINARY_DIR}/proto)
-
-# Add the new subdirectories to include path
 include_directories(include/clients)
 include_directories(include/parsers)
+include_directories(${CMAKE_BINARY_DIR}/proto)
+
 
 #
-# Common Sources - UPDATED PATHS
+# Add proto subdirectory
+#
+add_subdirectory(proto)
+
+#
+# Source files
 #
 set(COMMON_SOURCES
     src/clients/ingest_client.cpp
@@ -67,7 +70,7 @@ set(COMMON_SOURCES
 )
 
 #
-# Common Libraries
+# Libraries
 #
 set(COMMON_LIBRARIES
     myproto
@@ -83,13 +86,13 @@ set(COMMON_LIBRARIES
     absl_base
 )
 
-# Add XlsxWriter if found
+# Add optional libraries
 if(XLSXWRITER_LIBRARY)
-    set(COMMON_LIBRARIES ${COMMON_LIBRARIES} ${XLSXWRITER_LIBRARY})
+    list(APPEND COMMON_LIBRARIES ${XLSXWRITER_LIBRARY})
 endif()
 
 #
-# Common Include Directories for all targets
+# Include directories for all targets
 #
 set(COMMON_INCLUDE_DIRS
     ${CMAKE_CURRENT_SOURCE_DIR}/include
@@ -100,26 +103,24 @@ set(COMMON_INCLUDE_DIRS
 )
 
 #
-# Executables - All built to bin/ directory
+# Build executables
 #
-add_executable(h5_to_dp apps/h5_to_dp.cpp ${COMMON_SOURCES})
-target_link_libraries(h5_to_dp PRIVATE ${COMMON_LIBRARIES})
-target_include_directories(h5_to_dp PRIVATE ${COMMON_INCLUDE_DIRS})
+set(EXECUTABLES
+    h5_to_dp
+    mongo_to_npy
+    data_decoder
+    DataProvider_CLI
+)
 
-add_executable(mongo_to_npy apps/mongo_to_npy.cpp ${COMMON_SOURCES})
-target_link_libraries(mongo_to_npy PRIVATE ${COMMON_LIBRARIES})
-target_include_directories(mongo_to_npy PRIVATE ${COMMON_INCLUDE_DIRS})
-
-add_executable(data_decoder apps/data_decoder.cpp ${COMMON_SOURCES})
-target_link_libraries(data_decoder PRIVATE ${COMMON_LIBRARIES})
-target_include_directories(data_decoder PRIVATE ${COMMON_INCLUDE_DIRS})
-
-add_executable(DataProvider_CLI apps/DataProvider_CLI.cpp ${COMMON_SOURCES})
-target_link_libraries(DataProvider_CLI PRIVATE ${COMMON_LIBRARIES})
-target_include_directories(DataProvider_CLI PRIVATE ${COMMON_INCLUDE_DIRS})
+# Create all executables
+foreach(EXECUTABLE ${EXECUTABLES})
+    add_executable(${EXECUTABLE} apps/${EXECUTABLE}.cpp ${COMMON_SOURCES})
+    target_link_libraries(${EXECUTABLE} PRIVATE ${COMMON_LIBRARIES})
+    target_include_directories(${EXECUTABLE} PRIVATE ${COMMON_INCLUDE_DIRS})
+endforeach()
 
 #
-# Copy scripts to bin directory (simple approach)
+# Copy scripts to bin directory
 #
 file(GLOB SCRIPT_FILES scripts/*)
 if(SCRIPT_FILES)
@@ -127,18 +128,16 @@ if(SCRIPT_FILES)
         get_filename_component(script_name ${script_file} NAME)
         configure_file(${script_file} ${CMAKE_CURRENT_SOURCE_DIR}/bin/${script_name} COPYONLY)
     endforeach()
-    message(STATUS "Scripts will be copied to bin directory")
 endif()
 
 #
-# Install targets for system-wide installation (optional)
+# Install targets
 #
-install(TARGETS h5_to_dp mongo_to_npy data_decoder DataProvider_CLI
+install(TARGETS ${EXECUTABLES}
     RUNTIME DESTINATION bin
     COMPONENT executables
 )
 
-# Install scripts
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/scripts)
     install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/scripts/
         DESTINATION bin
@@ -148,23 +147,36 @@ if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/scripts)
 endif()
 
 #
-# Print summary of what will be built
+# Build summary
 #
 message(STATUS "")
 message(STATUS "=== DataProvider Build Configuration ===")
 message(STATUS "Build Type: ${CMAKE_BUILD_TYPE}")
 message(STATUS "Output Directory: ${CMAKE_CURRENT_SOURCE_DIR}/bin/")
-message(STATUS "Executables to build:")
-message(STATUS "  - DataProvider_CLI")
-message(STATUS "  - h5_to_dp")
-message(STATUS "  - mongo_to_npy") 
-message(STATUS "  - data_decoder")
-if(SCRIPT_FILES)
-    message(STATUS "Scripts to copy:")
-    foreach(script_file ${SCRIPT_FILES})
-        get_filename_component(script_name ${script_file} NAME)
-        message(STATUS "  - ${script_name}")
-    endforeach()
+message(STATUS "")
+message(STATUS "Core Executables:")
+message(STATUS "  ✓ DataProvider_CLI")
+message(STATUS "  ✓ h5_to_dp")
+message(STATUS "  ✓ mongo_to_npy")
+message(STATUS "  ✓ data_decoder")
+
+message(STATUS "")
+message(STATUS "Optional Features:")
+if(NLOHMANN_JSON_INCLUDE_DIR)
+    message(STATUS "  ✓ JSON support")
+else()
+    message(STATUS "  ✗ JSON support")
 endif()
+if(XLSXWRITER_LIBRARY)
+    message(STATUS "  ✓ Excel export")
+else()
+    message(STATUS "  ✗ Excel export")
+endif()
+if(CURL_FOUND)
+    message(STATUS "  ✓ HTTP client (CURL)")
+else()
+    message(STATUS "  ✗ HTTP client (CURL)")
+endif()
+
 message(STATUS "=========================================")
 message(STATUS "")

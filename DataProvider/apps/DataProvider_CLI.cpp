@@ -123,10 +123,10 @@ public:
         std::cout << "  --start TIME               Start time (Unix timestamp or ISO format)\n";
         std::cout << "  --end TIME                 End time (Unix timestamp or ISO format)\n";
         std::cout << "  --last DURATION            Last N duration (e.g., '2h', '30m', '1d')\n";
-        std::cout << "  --format FORMAT            Output format: numpy, csv, json, pytorch\n";
+        std::cout << "  --full-range               Use complete available time range\n";
+        std::cout << "  --format FORMAT            Output format: csv, json, numpy, pytorch\n";
         std::cout << "  --output PATH              Output path for exports\n";
-        std::cout << "  --project NAME             Filter by project name\n";
-        std::cout << "  --device TYPE              Filter by device type\n";
+        std::cout << "  --max-points N             Limit displayed points (default: 10)\n";
         std::cout << "  --quiet                    Minimal output\n";
         std::cout << "  --help                     Show this help\n\n";
 
@@ -177,12 +177,14 @@ public:
             std::cout << "USAGE: DataProvider_CLI query <PVS/PATTERN> [OPTIONS]\n\n";
             std::cout << "PVS/PATTERN:\n";
             std::cout << "  PV1,PV2,PV3                Comma-separated PV names\n";
-            std::cout << "  \"regex_pattern\"            Regex pattern matching PVs\n\n";
+            std::cout << "  \"regex_pattern\"            Regex pattern matching PVs\n";
+            std::cout << "  BPMS, KLYS, TMIT            Device type shortcuts\n\n";
             std::cout << "TIME OPTIONS:\n";
             std::cout << "  --start TIME               Start time (Unix or ISO format)\n";
             std::cout << "  --end TIME                 End time (Unix or ISO format)\n";
             std::cout << "  --last DURATION            Last N duration (2h, 30m, 1d)\n";
-            std::cout << "  --range HOURS              Last N hours (default: 1)\n\n";
+            std::cout << "  --range HOURS              Last N hours (default: 1)\n";
+            std::cout << "  --full-range               Use complete available time range\n\n";
             std::cout << "OUTPUT OPTIONS:\n";
             std::cout << "  --format FORMAT            csv, json, table (default: table)\n";
             std::cout << "  --output PATH              Save to file\n";
@@ -190,7 +192,9 @@ public:
             std::cout << "  --stats-only               Show only statistics\n\n";
             std::cout << "EXAMPLES:\n";
             std::cout << "  DataProvider_CLI query BPMS_DMPH_502_TMITBR --last 1h\n";
-            std::cout << "  DataProvider_CLI query \".*BPM.*\" --start 1750690485 --end 1750706894\n\n";
+            std::cout << "  DataProvider_CLI query \".*BPM.*\" --start 1750690485 --end 1750706894\n";
+            std::cout << "  DataProvider_CLI query BPMS --full-range --max-points 5\n";
+            std::cout << "  DataProvider_CLI query TMIT --last 6h --stats-only\n\n";
 
         } else if (command == "export") {
             std::cout << "EXPORT COMMAND - Export data for ML and analysis\n\n";
@@ -202,9 +206,11 @@ public:
             std::cout << "FORMAT OPTIONS:\n";
             std::cout << "  --format FORMAT            numpy, pytorch, csv, json\n";
             std::cout << "  --timeseries               Format for LSTM/RNN training\n";
-            std::cout << "  --sequence-length N        Sequence length for timeseries\n\n";
+            std::cout << "  --sequence-length N        Sequence length for timeseries\n";
+            std::cout << "  --full-range               Use complete available time range\n\n";
             std::cout << "EXAMPLES:\n";
             std::cout << "  DataProvider_CLI export \".*BPM.*\" --format=numpy\n";
+            std::cout << "  DataProvider_CLI export BPMS --full-range --format=csv\n";
             std::cout << "  DataProvider_CLI export all --format=pytorch --name=full_dataset\n\n";
 
         } else {
@@ -217,38 +223,41 @@ public:
     {
         std::cout << "COMMON PHYSICIST WORKFLOWS\n\n";
 
-        std::cout << "WORKFLOW 1: NEW DATA ANALYSIS\n";
-        std::cout << "Starting with new H5 files from the accelerator:\n\n";
-        std::cout << "1. Ingest H5 data:\n";
-        std::cout << "   DataProvider_CLI ingest /data/h5_files/ --project=CoAD --streaming\n\n";
-        std::cout << "2. Discover what's available:\n";
-        std::cout << "   DataProvider_CLI discover bpm\n";
-        std::cout << "   DataProvider_CLI discover \".*TMIT.*\"\n\n";
-        std::cout << "3. Query specific data:\n";
-        std::cout << "   DataProvider_CLI query \".*BPM.*\" --last 2h --format=csv\n\n";
-        std::cout << "4. Export for ML analysis:\n";
-        std::cout << "   DataProvider_CLI export \".*BPM.*\" --format=numpy --name=bpm_analysis\n\n";
+        std::cout << "WORKFLOW 1: QUICK DATA EXPLORATION\n";
+        std::cout << "Fast analysis of existing data:\n\n";
+        std::cout << "1. Find what's available:\n";
+        std::cout << "   DataProvider_CLI discover bpm --count-only\n\n";
+        std::cout << "2. Get all BPM data:\n";
+        std::cout << "   DataProvider_CLI query BPMS --full-range --stats-only\n\n";
+        std::cout << "3. Quick sample for analysis:\n";
+        std::cout << "   DataProvider_CLI query \".*TMIT.*\" --last 2h --max-points 100\n\n";
 
-        std::cout << "WORKFLOW 2: EXISTING DATA ANALYSIS\n";
-        std::cout << "Working with data already in MongoDB:\n\n";
-        std::cout << "1. Check what's available:\n";
-        std::cout << "   DataProvider_CLI discover --group-by device\n\n";
-        std::cout << "2. Get recent BPM data:\n";
-        std::cout << "   DataProvider_CLI query \".*BPM.*\" --last 6h --stats-only\n\n";
-        std::cout << "3. Export klystron data for correlation analysis:\n";
-        std::cout << "   DataProvider_CLI export \".*KLYS.*\" --format=numpy\n\n";
-        std::cout << "4. Monitor live data:\n";
-        std::cout << "   DataProvider_CLI monitor BPMS_DMPH_502_TMITBR\n\n";
-
-        std::cout << "WORKFLOW 3: ML MODEL TRAINING\n";
-        std::cout << "Preparing data for machine learning:\n\n";
-        std::cout << "1. Export time series data:\n";
+        std::cout << "WORKFLOW 2: COMPLETE DATASET EXPORT\n";
+        std::cout << "Export full datasets for detailed analysis:\n\n";
+        std::cout << "1. Export all BPM data:\n";
+        std::cout << "   DataProvider_CLI export BPMS --full-range --format=csv\n\n";
+        std::cout << "2. Export for machine learning:\n";
+        std::cout << "   DataProvider_CLI export \".*KLYS.*\" --full-range --format=numpy\n\n";
+        std::cout << "3. Time series for ML training:\n";
         std::cout << "   DataProvider_CLI export \".*BPM.*\" --timeseries --sequence-length=100\n\n";
-        std::cout << "2. Export with train/test split:\n";
-        std::cout << "   DataProvider_CLI export \".*TMIT.*\" --format=pytorch --split=0.8\n\n";
-        std::cout << "3. Create multiple datasets:\n";
-        std::cout << "   DataProvider_CLI export \".*BPM.*\" --name=bpm_dataset\n";
-        std::cout << "   DataProvider_CLI export \".*KLYS.*\" --name=rf_dataset\n\n";
+
+        std::cout << "WORKFLOW 3: NEW DATA INGESTION\n";
+        std::cout << "Processing new H5 files from accelerator:\n\n";
+        std::cout << "1. Ingest new data:\n";
+        std::cout << "   DataProvider_CLI ingest /data/h5_files/ --streaming\n\n";
+        std::cout << "2. Verify ingestion:\n";
+        std::cout << "   DataProvider_CLI discover --group-by device\n\n";
+        std::cout << "3. Test query new data:\n";
+        std::cout << "   DataProvider_CLI query \".*BPM.*\" --last 1h --max-points 3\n\n";
+
+        std::cout << "WORKFLOW 4: REAL-TIME MONITORING\n";
+        std::cout << "Monitor live accelerator data:\n\n";
+        std::cout << "1. Monitor specific PV:\n";
+        std::cout << "   DataProvider_CLI monitor BPMS_DMPH_502_TMITBR\n\n";
+        std::cout << "2. Check recent trends:\n";
+        std::cout << "   DataProvider_CLI query BPMS --last 30m --stats-only\n\n";
+        std::cout << "3. Export recent data:\n";
+        std::cout << "   DataProvider_CLI query \".*TMIT.*\" --last 1h --format=csv\n\n";
     }
 
     int runStatus(const std::vector<std::string>& args) {
@@ -509,22 +518,22 @@ public:
 
         // Transform unified options to data_decoder options
         std::vector<std::string> decoder_args;
-        
+
         std::string target = args[1];
-        
+
         // Better logic for determining command type
-        bool is_regex_pattern = target.find(".*") != std::string::npos || 
+        bool is_regex_pattern = target.find(".*") != std::string::npos ||
                                target.find("[") != std::string::npos ||
                                target.find("^") != std::string::npos ||
                                target.find("$") != std::string::npos;
-        
+
         bool is_comma_separated = target.find(",") != std::string::npos;
-        
+
         // Check if it looks like a device type (short, all caps, no special chars)
-        bool looks_like_device_type = target.length() <= 10 && 
+        bool looks_like_device_type = target.length() <= 10 &&
                                      target.find_first_not_of("ABCDEFGHIJKLMNOPQRSTUVWXYZ_") == std::string::npos &&
                                      !is_comma_separated;
-        
+
         if (is_regex_pattern) {
             // It's a regex pattern - use pattern command to get data
             decoder_args.push_back("pattern");
@@ -546,12 +555,12 @@ public:
         // Transform common options
         for (size_t i = 2; i < args.size(); ++i) {
             const std::string& arg = args[i];
-            
+
             if (arg == "--help") {
                 showCommandHelp("query");
                 return 0;
             }
-            
+
             // Handle options that take values
             if (arg == "--start" || arg == "--end" || arg == "--range" || arg == "--max-points") {
                 decoder_args.push_back(arg);
@@ -560,7 +569,7 @@ public:
                     i++; // Skip the next argument since we just processed it
                 }
             }
-            // Handle options that start with -- and contain = 
+            // Handle options that start with -- and contain =
             else if (arg.find("--") == 0 && arg.find("=") != std::string::npos) {
                 if (arg.find("--format=") == 0) {
                     std::string format = arg.substr(9);
@@ -586,7 +595,7 @@ public:
                 }
             }
             // Handle options that are just flags (no values)
-            else if (arg == "--stats-only" || arg == "--no-serialized" || arg == "--quiet") {
+            else if (arg == "--stats-only" || arg == "--no-serialized" || arg == "--quiet" || arg == "--full-range") {
                 decoder_args.push_back(arg);
             }
             // Handle --last which takes a value

@@ -44,7 +44,8 @@ void printUsage(const std::string& program_name) {
     std::cout << "  --start TIME               Start time (YYYY-MM-DD HH:MM:SS or Unix)\n";
     std::cout << "  --end TIME                 End time (YYYY-MM-DD HH:MM:SS or Unix)\n";
     std::cout << "  --last DURATION            Last N time (e.g., '1h', '30m', '2d')\n";
-    std::cout << "  --range HOURS              Query last N hours (default: 1)\n\n";
+    std::cout << "  --range HOURS              Query last N hours (default: 1)\n";
+    std::cout << "  --full-range               Use full available time range for pattern\n\n";
 
     std::cout << "OUTPUT OPTIONS:\n";
     std::cout << "  --csv FILE                 Export to CSV file\n";
@@ -78,6 +79,7 @@ struct CommandArgs {
     std::string end_time;
     std::string last_duration;
     int range_hours = 1;
+    bool full_range = false;
 
     std::string csv_file;
     std::string json_file;
@@ -120,6 +122,8 @@ CommandArgs parseArgs(int argc, char* argv[]) {
             if (i + 1 < arguments.size()) {
                 args.range_hours = std::stoi(arguments[++i]);
             }
+        } else if (arg == "--full-range") {
+            args.full_range = true;
         } else if (arg == "--csv") {
             if (i + 1 < arguments.size()) {
                 args.csv_file = arguments[++i];
@@ -150,7 +154,7 @@ CommandArgs parseArgs(int argc, char* argv[]) {
     return args;
 }
 
-std::pair<uint64_t, uint64_t> calculateTimeRange(const CommandArgs& args) {
+std::pair<uint64_t, uint64_t> calculateTimeRange(const CommandArgs& args, DataDecoder& decoder, const std::string& pattern = "") {
     uint64_t now = TimeUtils::getCurrentUnixTime();
 
     if (!args.start_time.empty() && !args.end_time.empty()) {
@@ -161,6 +165,57 @@ std::pair<uint64_t, uint64_t> calculateTimeRange(const CommandArgs& args) {
     } else if (!args.last_duration.empty()) {
         // Relative duration
         uint64_t start = TimeUtils::getRelativeTime(args.last_duration);
+        return {start, now};
+    } else if (args.full_range && !pattern.empty()) {
+        // NEW: Use full available time range for pattern
+        std::cout << "Determining full time range for pattern: " << pattern << std::endl;
+        
+        try {
+            // Get metadata for all PVs matching pattern
+            auto request = makeQueryPvMetadataRequestWithPattern(pattern);
+            auto response = decoder.queryPvMetadata(request);
+            
+            if (response.has_metadataresult()) {
+                const auto& result = response.metadataresult();
+                
+                if (result.pvinfos_size() == 0) {
+                    std::cout << "No PVs found for pattern, using default range" << std::endl;
+                    uint64_t start = now - (args.range_hours * 3600);
+                    return {start, now};
+                }
+                
+                uint64_t earliest_start = UINT64_MAX;
+                uint64_t latest_end = 0;
+                
+                for (int i = 0; i < result.pvinfos_size(); ++i) {
+                    const auto& pv_info = result.pvinfos(i);
+                    
+                    if (pv_info.has_firstdatatimestamp()) {
+                        uint64_t pv_start = pv_info.firstdatatimestamp().epochseconds();
+                        earliest_start = std::min(earliest_start, pv_start);
+                    }
+                    
+                    if (pv_info.has_lastdatatimestamp()) {
+                        uint64_t pv_end = pv_info.lastdatatimestamp().epochseconds();
+                        latest_end = std::max(latest_end, pv_end);
+                    }
+                }
+                
+                if (earliest_start != UINT64_MAX && latest_end != 0) {
+                    std::cout << "Full time range: " << TimeUtils::formatUnixTime(earliest_start) 
+                              << " to " << TimeUtils::formatUnixTime(latest_end) << std::endl;
+                    std::cout << "Total duration: " << ((latest_end - earliest_start) / 3600) << " hours" << std::endl;
+                    return {earliest_start, latest_end};
+                } else {
+                    std::cout << "Could not determine full range, using default" << std::endl;
+                }
+            }
+        } catch (const std::exception& e) {
+            std::cerr << "Error determining full range: " << e.what() << std::endl;
+        }
+        
+        // Fallback to default range
+        uint64_t start = now - (args.range_hours * 3600);
         return {start, now};
     } else {
         // Default: last N hours
@@ -291,7 +346,7 @@ int main(int argc, char* argv[]) {
 
             std::cout << "\nPV DECODING\n";
 
-            auto [start_time, end_time] = calculateTimeRange(args);
+            auto [start_time, end_time] = calculateTimeRange(args, decoder);
             std::cout << "Time range: " << TimeUtils::formatUnixTime(start_time)
                       << " to " << TimeUtils::formatUnixTime(end_time) << std::endl;
             std::cout << "PVs to decode: " << pv_names.size() << std::endl;
@@ -335,12 +390,14 @@ int main(int argc, char* argv[]) {
 
             std::cout << "\nPATTERN DECODING\n";
 
-            auto [start_time, end_time] = calculateTimeRange(args);
+            // NEW: Calculate time range with pattern support for full range
+            auto [start_time, end_time] = calculateTimeRange(args, decoder, pattern);
             std::cout << "Pattern: " << pattern << std::endl;
             std::cout << "Time range: " << TimeUtils::formatUnixTime(start_time)
                       << " to " << TimeUtils::formatUnixTime(end_time) << std::endl;
 
-            auto decoded_data = decoder.queryAndDecodeByPattern(pattern, start_time, end_time, args.use_serialized);
+            // Use streaming for pattern queries (designed for large datasets)
+            auto decoded_data = decoder.queryAndDecodeByPatternStreaming(pattern, start_time, end_time, args.use_serialized);
 
             if (decoded_data.empty()) {
                 std::cout << "\nNo data retrieved" << std::endl;
@@ -385,7 +442,7 @@ int main(int argc, char* argv[]) {
                 pv_names.push_back(pv);
             }
 
-            auto [start_time, end_time] = calculateTimeRange(args);
+            auto [start_time, end_time] = calculateTimeRange(args, decoder);
             auto response = decoder.getRawQueryResponse(pv_names, start_time, end_time, args.use_serialized);
 
             printRawResponse(response);

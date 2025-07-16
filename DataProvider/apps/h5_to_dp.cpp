@@ -45,6 +45,44 @@ void printMemoryUsage(const std::string& context) {
               << "Peak=" << (info.peak_memory_kb / 1024) << "MB" << std::endl;
 }
 
+void printUsage(const std::string& program_name) {
+    std::cout << R"(
+ ╔═════════════════════════════════════════════════════════════════╗
+ ║                                                                 ║
+ ║  ██╗  ██╗███████╗    ████████╗ ██████╗     ██████╗ ██████╗      ║
+ ║  ██║  ██║██╔════╝    ╚══██╔══╝██╔═══██╗    ██╔══██╗██╔══██╗     ║
+ ║  ███████║███████╗       ██║   ██║   ██║    ██║  ██║██████╔╝     ║
+ ║  ██╔══██║╚════██║       ██║   ██║   ██║    ██║  ██║██╔═══╝      ║
+ ║  ██║  ██║███████║       ██║   ╚██████╔╝    ██████╔╝██║          ║
+ ║  ╚═╝  ╚═╝╚══════╝       ╚═╝    ╚═════╝     ╚═════╝ ╚═╝          ║
+ ║                                                                 ║
+ ║                    H5 to DataProvider Ingestion                 ║
+ ║                    Convert H5 files to MongoDB                  ║
+ ║                            Version 2.0                          ║
+ ║                                                                 ║
+ ╚═════════════════════════════════════════════════════════════════╝
+
+)" << std::endl;
+
+    std::cout << "USAGE: " << program_name << " <h5_directory> [OPTIONS]\n\n";
+
+    std::cout << "PROCESSING OPTIONS:\n";
+    std::cout << "  --local-only                  Parse only, don't send to MLDP\n";
+    std::cout << "  --streaming                   Use streaming ingestion (recommended)\n";
+    std::cout << "  --batch-size=N                Batch size for streaming (default: 10)\n";
+    std::cout << "  --show-filters                Show available filter options\n\n";
+
+    std::cout << "FILTER OPTIONS:\n";
+    std::cout << "  --device=DEVICE               Filter by device (e.g., KLYS, BPMS)\n";
+    std::cout << "  --device-area=AREA            Filter by device area (e.g., LI23, DMPH)\n";
+    std::cout << "  --project=PROJECT             Filter by project (e.g., CoAD)\n";
+    std::cout << "  --max-signals=N               Limit to N signals\n\n";
+
+    std::cout << "CONNECTION OPTIONS:\n";
+    std::cout << "  --mldp-server=ADDRESS         MLDP server address\n";
+    std::cout << "                                 (default: localhost:50051)\n\n";
+}
+
 // MLDP ingestion helper functions
 uint64_t getCurrentEpochSeconds() {
     return std::chrono::system_clock::now().time_since_epoch() / std::chrono::seconds(1);
@@ -191,7 +229,7 @@ std::string generateRequestId(const SignalData& signal, size_t batch_index = 0) 
 bool ingestSignalsIndividually(IngestClient& client,
                               const std::vector<SignalData>& signals,
                               const std::string& providerId) {
-    std::cout << "\n=== Individual Signal Ingestion ===" << std::endl;
+    std::cout << "\nINDIVIDUAL SIGNAL INGESTION\n";
     std::cout << "Processing " << signals.size() << " signals individually" << std::endl;
 
     size_t success_count = 0;
@@ -234,7 +272,7 @@ bool ingestSignalsIndividually(IngestClient& client,
     auto end_time = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
 
-    std::cout << "\n=== Individual Ingestion Results ===" << std::endl;
+    std::cout << "\nINDIVIDUAL INGESTION RESULTS\n";
     std::cout << "Successfully ingested: " << success_count << "/" << signals.size()
               << " signals" << std::endl;
     std::cout << "Total data points: " << total_data_points << std::endl;
@@ -248,7 +286,7 @@ bool ingestSignalsStreaming(IngestClient& client,
                            const std::vector<SignalData>& signals,
                            const std::string& providerId,
                            size_t batch_size = 10) {
-    std::cout << "\n=== Streaming Signal Ingestion ===" << std::endl;
+    std::cout << "\nSTREAMING SIGNAL INGESTION\n";
     std::cout << "Processing " << signals.size() << " signals in batches of "
               << batch_size << std::endl;
 
@@ -303,7 +341,7 @@ bool ingestSignalsStreaming(IngestClient& client,
     auto end_time = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
 
-    std::cout << "\n=== Streaming Ingestion Results ===" << std::endl;
+    std::cout << "\nSTREAMING INGESTION RESULTS\n";
     std::cout << "Successfully ingested: " << total_success << "/" << signals.size()
               << " signals" << std::endl;
     std::cout << "Total data points: " << total_data_points << std::endl;
@@ -347,7 +385,7 @@ std::vector<SignalData> filterSignals(const std::vector<SignalData>& signals,
 
 // Print filter options
 void printFilterOptions(const std::vector<SignalData>& signals) {
-    std::cout << "\n=== Available Filter Options ===" << std::endl;
+    std::cout << "\nAVAILABLE FILTER OPTIONS\n";
 
     // Device types
     std::set<std::string> devices;
@@ -360,23 +398,38 @@ void printFilterOptions(const std::vector<SignalData>& signals) {
         projects.insert(signal.file_metadata.project);
     }
 
-    std::cout << "Devices: ";
+    std::cout << "Filter Type          Values\n";
+
+    std::cout << "Devices              ";
+    bool first = true;
     for (const auto& device : devices) {
-        std::cout << device << " ";
+        if (!first) std::cout << ", ";
+        std::cout << device;
+        first = false;
     }
     std::cout << std::endl;
 
-    std::cout << "Device Areas: ";
+    std::cout << "Device Areas         ";
+    first = true;
     for (const auto& area : device_areas) {
-        std::cout << area << " ";
+        if (!first) std::cout << ", ";
+        std::cout << area;
+        first = false;
     }
     std::cout << std::endl;
 
-    std::cout << "Projects: ";
+    std::cout << "Projects             ";
+    first = true;
     for (const auto& project : projects) {
-        std::cout << project << " ";
+        if (!first) std::cout << ", ";
+        std::cout << project;
+        first = false;
     }
     std::cout << std::endl;
+
+    std::cout << "\nUsage examples:\n";
+    std::cout << "  --device=BPMS --device-area=DMPH\n";
+    std::cout << "  --project=CoAD --max-signals=100\n\n";
 }
 
 // Progress monitoring class for large ingestions
@@ -434,7 +487,7 @@ public:
         auto end_time = std::chrono::high_resolution_clock::now();
         auto total_time = std::chrono::duration_cast<std::chrono::seconds>(end_time - start_time_);
 
-        std::cout << "\n=== Ingestion Summary ===" << std::endl;
+        std::cout << "\nINGESTION SUMMARY\n";
         std::cout << "Total signals: " << total_signals_ << std::endl;
         std::cout << "Successfully processed: " << successful_signals_ << std::endl;
         std::cout << "Failed: " << (processed_signals_ - successful_signals_) << std::endl;
@@ -452,17 +505,7 @@ public:
 // Main function
 int main(int argc, char* argv[]) {
     if (argc < 2) {
-        std::cerr << "Usage: " << argv[0] << " <h5_directory> [options]" << std::endl;
-        std::cerr << "Options:" << std::endl;
-        std::cerr << "  --local-only                  Parse only, don't send to MLDP" << std::endl;
-        std::cerr << "  --device=DEVICE               Filter by device (e.g., KLYS, BPMS)" << std::endl;
-        std::cerr << "  --device-area=AREA            Filter by device area (e.g., LI23, DMPH)" << std::endl;
-        std::cerr << "  --project=PROJECT             Filter by project (e.g., CoAD)" << std::endl;
-        std::cerr << "  --max-signals=N               Limit to N signals" << std::endl;
-        std::cerr << "  --streaming                   Use streaming ingestion" << std::endl;
-        std::cerr << "  --batch-size=N                Batch size for streaming (default: 10)" << std::endl;
-        std::cerr << "  --show-filters                Show available filter options" << std::endl;
-        std::cerr << "  --mldp-server=ADDRESS         MLDP server address (default: localhost:50051)" << std::endl;
+        printUsage(argv[0]);
         return 1;
     }
 
@@ -504,14 +547,14 @@ int main(int argc, char* argv[]) {
     try {
         printMemoryUsage("Application Start");
 
-        std::cout << "=== H5 to MongoDB Ingestion ===" << std::endl;
+        std::cout << "H5 TO MONGODB INGESTION\n";
         std::cout << "H5 Directory: " << h5_directory << std::endl;
         std::cout << "MLDP Server: " << mldp_server << std::endl;
         std::cout << "Mode: " << (local_only ? "Local parsing only" :
                                   (use_streaming ? "Streaming ingestion" : "Individual ingestion")) << std::endl;
 
         // Parse H5 files
-        std::cout << "\n--- Step 1: Parsing H5 Files ---" << std::endl;
+        std::cout << "\nSTEP 1: PARSING H5 FILES\n";
         H5Parser parser(h5_directory);
 
         printMemoryUsage("Before H5 Parsing");
@@ -542,7 +585,7 @@ int main(int argc, char* argv[]) {
                                                device_area_filter, project_filter, max_signals);
 
         if (signals_to_process.size() != all_signals.size()) {
-            std::cout << "\n--- Filtering Results ---" << std::endl;
+            std::cout << "\nFILTERING RESULTS\n";
             std::cout << "Filtered from " << all_signals.size() << " to "
                       << signals_to_process.size() << " signals" << std::endl;
 
@@ -566,13 +609,14 @@ int main(int argc, char* argv[]) {
         }
 
         if (local_only) {
-            std::cout << "\nLocal-only mode: Parsing complete. Exiting." << std::endl;
+            std::cout << "\nLOCAL-ONLY MODE COMPLETE\n";
+            std::cout << "Parsing complete. Exiting without ingestion." << std::endl;
             printMemoryUsage("Local-only Complete");
             return 0;
         }
 
         // Connect to MLDP and register provider
-        std::cout << "\n--- Step 2: MLDP Registration ---" << std::endl;
+        std::cout << "\nSTEP 2: MLDP REGISTRATION\n";
 
         IngestClient client(mldp_server);
 
@@ -612,7 +656,7 @@ int main(int argc, char* argv[]) {
         printMemoryUsage("After MLDP Registration");
 
         // Ingest signals
-        std::cout << "\n--- Step 3: Data Ingestion ---" << std::endl;
+        std::cout << "\nSTEP 3: DATA INGESTION\n";
 
         bool success;
         if (use_streaming) {
@@ -624,23 +668,23 @@ int main(int argc, char* argv[]) {
         printMemoryUsage("After Data Ingestion");
 
         // Final summary
-        std::cout << "\n=== Final Summary ===" << std::endl;
+        std::cout << "\nFINAL SUMMARY\n";
         if (success) {
-            std::cout << "✓ Ingestion completed successfully" << std::endl;
-            std::cout << "✓ Provider ID: " << providerId << std::endl;
-            std::cout << "✓ Mode: " << (use_streaming ? "Streaming" : "Individual") << std::endl;
-            std::cout << "✓ Signals processed: " << signals_to_process.size() << std::endl;
+            std::cout << "Ingestion completed successfully" << std::endl;
+            std::cout << "Provider ID: " << providerId << std::endl;
+            std::cout << "Mode: " << (use_streaming ? "Streaming" : "Individual") << std::endl;
+            std::cout << "Signals processed: " << signals_to_process.size() << std::endl;
 
             // Calculate total data points
             size_t total_points = 0;
             for (const auto& signal : signals_to_process) {
                 total_points += signal.values.size();
             }
-            std::cout << "✓ Total data points: " << total_points << std::endl;
+            std::cout << "Total data points: " << total_points << std::endl;
 
             return 0;
         } else {
-            std::cerr << "✗ Ingestion failed" << std::endl;
+            std::cerr << "Ingestion failed" << std::endl;
             return 1;
         }
 

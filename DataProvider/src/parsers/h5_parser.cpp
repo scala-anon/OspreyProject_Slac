@@ -167,38 +167,49 @@ std::vector<std::string> H5Parser::discoverH5Files() const {
     return h5_files;
 }
 
+// In h5_parser.cpp, replace the matchesNamingConvention function:
+
 bool H5Parser::matchesNamingConvention(const std::string& filepath) const {
     std::filesystem::path path(filepath);
     std::string filename = path.stem().string();
-    
-    // Pattern: origin_pathway_date_time_project
-    std::regex pattern(R"(([A-Z]+)_([A-Z]+)_(\d{8})_(\d{6})_([A-Za-z0-9]+))");
+
+    // Updated pattern: origin_pathway_date_time[_project] (project is optional)
+    std::regex pattern(R"(([A-Z]+)_([A-Z]+)_(\d{8})_(\d{6})(?:_([A-Za-z0-9]+))?)");
     return std::regex_match(filename, pattern);
 }
+
+// Also update the parseFilename function to handle optional project:
 
 H5FileMetadata H5Parser::parseFilename(const std::string& filepath) const {
     H5FileMetadata metadata;
     metadata.full_path = filepath;
-    
+
     std::filesystem::path path(filepath);
     std::string filename = path.stem().string();
-    
-    std::regex pattern(R"(([A-Z]+)_([A-Z]+)_(\d{8})_(\d{6})_([A-Za-z0-9]+))");
+
+    // Updated pattern with optional project
+    std::regex pattern(R"(([A-Z]+)_([A-Z]+)_(\d{8})_(\d{6})(?:_([A-Za-z0-9]+))?)");
     std::smatch matches;
-    
+
     if (std::regex_match(filename, matches, pattern)) {
         metadata.origin = matches[1].str();
         metadata.pathway = matches[2].str();
         metadata.date = matches[3].str();
         metadata.time = matches[4].str();
-        metadata.project = matches[5].str();
         
+        // Project is optional (group 5)
+        if (matches.size() > 5 && matches[5].matched) {
+            metadata.project = matches[5].str();
+        } else {
+            metadata.project = "default";  // Or extract from directory name
+        }
+
         // Convert to timestamp
         metadata.file_timestamp_seconds = parseTimestamp(metadata.date, metadata.time);
         metadata.valid_timestamp = (metadata.file_timestamp_seconds > 0);
-        
-        std::cout << "  Parsed metadata: " << metadata.origin << "_" << metadata.pathway 
-                  << " " << metadata.date << "_" << metadata.time 
+
+        std::cout << "  Parsed metadata: " << metadata.origin << "_" << metadata.pathway
+                  << " " << metadata.date << "_" << metadata.time
                   << " project=" << metadata.project << std::endl;
     } else {
         std::cerr << "  Warning: Filename doesn't match expected pattern: " << filename << std::endl;
@@ -210,7 +221,7 @@ H5FileMetadata H5Parser::parseFilename(const std::string& filepath) const {
         metadata.file_timestamp_seconds = 0;
         metadata.valid_timestamp = false;
     }
-    
+
     return metadata;
 }
 

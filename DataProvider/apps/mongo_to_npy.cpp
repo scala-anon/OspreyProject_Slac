@@ -64,14 +64,18 @@ std::vector<std::string> parseCommaSeparatedPVs(const std::string& pv_string) {
 }
 
 std::pair<uint64_t, uint64_t> getTimeRange(int hours_back = 24) {
-    // ALWAYS use your actual historical data range instead of current time
-    uint64_t actual_data_start = 1750690485;  // June 23, 2025 14:54:45 UTC
-    uint64_t actual_data_end = 1750706894;    // June 23, 2025 19:28:14 UTC
-
-    std::cout << "Using historical data range (June 23, 2025): "
-              << actual_data_start << " to " << actual_data_end << std::endl;
-
-    return {actual_data_start, actual_data_end};
+    // Calculate current time and time range
+    auto now = std::chrono::system_clock::now();
+    auto now_time_t = std::chrono::system_clock::to_time_t(now);
+    uint64_t current_timestamp = static_cast<uint64_t>(now_time_t);
+    
+    // Calculate start time (hours_back hours ago)
+    uint64_t start_timestamp = current_timestamp - (hours_back * 3600);
+    
+    std::cout << "Using time range: last " << hours_back << " hours" << std::endl;
+    std::cout << "From: " << start_timestamp << " to " << current_timestamp << std::endl;
+    
+    return {start_timestamp, current_timestamp};
 }
 
 void printPVPatterns(MongoToNPYParser& parser) {

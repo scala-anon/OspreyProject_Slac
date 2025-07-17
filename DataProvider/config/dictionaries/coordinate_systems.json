@@ -1,0 +1,20 @@
+{
+  "sectors": {
+    "92H": {
+      "description": "Sector 92 Hard X-ray",
+      "location_range": ["500", "510"]
+    },
+    "23": {
+      "description": "Linac Sector 23",
+      "location_range": ["20", "30"]
+    },
+    "LTUH": {
+      "description": "Hard X-ray undulator hall",
+      "location_range": ["600", "800"]
+    },
+    "DMPS": {
+      "description": "Dump line",
+      "location_range": ["690", "700"]
+    }
+  }
+}

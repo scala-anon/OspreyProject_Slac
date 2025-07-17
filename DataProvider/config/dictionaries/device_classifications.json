@@ -1,0 +1,276 @@
+{
+  "device_types": {
+    "BPMS": {
+      "full_name": "Beam Position Monitor System",
+      "category": "beam_diagnostics",
+      "function": "Measures beam position and current",
+      "typical_signals": {
+        "X": {"description": "Horizontal position", "units": "mm", "record_type": "ai"},
+        "Y": {"description": "Vertical position", "units": "mm", "record_type": "ai"},
+        "TMIT": {"description": "Transmitted charge", "units": "pC", "record_type": "ai"},
+        "TMITBR": {"description": "Transmitted charge (broadcast)", "units": "pC", "record_type": "ai"}
+      },
+      "naming_pattern": "BPMS:{AREA}:{DEVICE_NUM}:{SIGNAL}",
+      "physical_description": "Strip-line or cavity BPM for beam position measurement"
+    },
+    "QUAD": {
+      "full_name": "Quadrupole Magnet",
+      "category": "beam_transport",
+      "function": "Focuses or defocuses the beam",
+      "typical_signals": {
+        "BDES": {"description": "Desired magnetic field", "units": "kG", "record_type": "ao"},
+        "BACT": {"description": "Actual magnetic field", "units": "kG", "record_type": "ai"},
+        "BCON": {"description": "Control magnetic field", "units": "kG", "record_type": "ao"},
+        "IDES": {"description": "Desired current", "units": "A", "record_type": "ao"},
+        "IACT": {"description": "Actual current", "units": "A", "record_type": "ai"}
+      },
+      "naming_pattern": "QUAD:{AREA}:{DEVICE_NUM}:{SIGNAL}",
+      "physical_description": "Electromagnetic quadrupole for beam focusing"
+    },
+    "XCOR": {
+      "full_name": "Horizontal Corrector",
+      "category": "beam_transport", 
+      "function": "Corrects horizontal beam trajectory",
+      "typical_signals": {
+        "BDES": {"description": "Desired magnetic field", "units": "kG-m", "record_type": "ao"},
+        "BACT": {"description": "Actual magnetic field", "units": "kG-m", "record_type": "ai"},
+        "IDES": {"description": "Desired current", "units": "A", "record_type": "ao"},
+        "IACT": {"description": "Actual current", "units": "A", "record_type": "ai"}
+      },
+      "naming_pattern": "XCOR:{AREA}:{DEVICE_NUM}:{SIGNAL}",
+      "physical_description": "Horizontal steering dipole corrector"
+    },
+    "YCOR": {
+      "full_name": "Vertical Corrector",
+      "category": "beam_transport",
+      "function": "Corrects vertical beam trajectory", 
+      "typical_signals": {
+        "BDES": {"description": "Desired magnetic field", "units": "kG-m", "record_type": "ao"},
+        "BACT": {"description": "Actual magnetic field", "units": "kG-m", "record_type": "ai"},
+        "IDES": {"description": "Desired current", "units": "A", "record_type": "ao"},
+        "IACT": {"description": "Actual current", "units": "A", "record_type": "ai"}
+      },
+      "naming_pattern": "YCOR:{AREA}:{DEVICE_NUM}:{SIGNAL}",
+      "physical_description": "Vertical steering dipole corrector"
+    },
+    "KLYS": {
+      "full_name": "Klystron",
+      "category": "rf_system",
+      "function": "Provides RF power for acceleration",
+      "typical_signals": {
+        "PDES": {"description": "Desired power", "units": "MW", "record_type": "ao"},
+        "PACT": {"description": "Actual power", "units": "MW", "record_type": "ai"},
+        "ADES": {"description": "Desired amplitude", "units": "MV", "record_type": "ao"},
+        "AACT": {"description": "Actual amplitude", "units": "MV", "record_type": "ai"},
+        "PDES": {"description": "Desired phase", "units": "deg", "record_type": "ao"},
+        "PACT": {"description": "Actual phase", "units": "deg", "record_type": "ai"}
+      },
+      "naming_pattern": "KLYS:{AREA}:{DEVICE_NUM}:{SIGNAL}",
+      "physical_description": "High power microwave amplifier for RF acceleration"
+    },
+    "TORO": {
+      "full_name": "Toroidal Current Monitor",
+      "category": "beam_diagnostics", 
+      "function": "Measures beam current",
+      "typical_signals": {
+        "TMIT": {"description": "Transmitted charge", "units": "pC", "record_type": "ai"},
+        "CHRG": {"description": "Bunch charge", "units": "pC", "record_type": "ai"}
+      },
+      "naming_pattern": "TORO:{AREA}:{DEVICE_NUM}:{SIGNAL}",
+      "physical_description": "Toroidal transformer for non-invasive current measurement"
+    },
+    "UND": {
+      "full_name": "Undulator",
+      "category": "insertion_device",
+      "function": "Generates X-ray radiation",
+      "typical_signals": {
+        "KDES": {"description": "Desired K parameter", "units": "none", "record_type": "ao"},
+        "KACT": {"description": "Actual K parameter", "units": "none", "record_type": "ai"},
+        "GAPDES": {"description": "Desired gap", "units": "mm", "record_type": "ao"},
+        "GAPACT": {"description": "Actual gap", "units": "mm", "record_type": "ai"}
+      },
+      "naming_pattern": "UND:{AREA}:{DEVICE_NUM}:{SIGNAL}",
+      "physical_description": "Periodic magnetic structure for X-ray generation"
+    },
+    "RFBX": {
+      "full_name": "RF BPM Electronics",
+      "category": "beam_diagnostics",
+      "function": "RF-based beam position measurement",
+      "typical_signals": {
+        "X1H": {"description": "X position (high res)", "units": "um", "record_type": "ai"},
+        "Y1H": {"description": "Y position (high res)", "units": "um", "record_type": "ai"},
+        "S1H": {"description": "Sum signal (high res)", "units": "dBm", "record_type": "ai"}
+      },
+      "naming_pattern": "RFBX:{AREA}:{DEVICE_NUM}:{SIGNAL}",
+      "physical_description": "RF-based high-resolution beam position monitor"
+    },
+    "BEND": {
+      "full_name": "Bending Magnet",
+      "category": "beam_transport",
+      "function": "Bends beam trajectory",
+      "typical_signals": {
+        "BDES": {"description": "Desired magnetic field", "units": "kG", "record_type": "ao"},
+        "BACT": {"description": "Actual magnetic field", "units": "kG", "record_type": "ai"},
+        "IDES": {"description": "Desired current", "units": "A", "record_type": "ao"},
+        "IACT": {"description": "Actual current", "units": "A", "record_type": "ai"}
+      },
+      "naming_pattern": "BEND:{AREA}:{DEVICE_NUM}:{SIGNAL}",
+      "physical_description": "Dipole magnet for beam trajectory control"
+    },
+    "PROF": {
+      "full_name": "Profile Monitor", 
+      "category": "beam_diagnostics",
+      "function": "Measures beam profile and size",
+      "typical_signals": {
+        "SIGMAX": {"description": "Horizontal beam size", "units": "um", "record_type": "ai"},
+        "SIGMAY": {"description": "Vertical beam size", "units": "um", "record_type": "ai"},
+        "XRMS": {"description": "X RMS beam size", "units": "um", "record_type": "ai"},
+        "YRMS": {"description": "Y RMS beam size", "units": "um", "record_type": "ai"}
+      },
+      "naming_pattern": "PROF:{AREA}:{DEVICE_NUM}:{SIGNAL}",
+      "physical_description": "Wire scanner or screen for beam profile measurement"
+    },
+    "COLL": {
+      "full_name": "Collimator",
+      "category": "beam_transport",
+      "function": "Removes beam halo and defines beam aperture",
+      "typical_signals": {
+        "XGAP": {"description": "Horizontal gap", "units": "mm", "record_type": "ao"},
+        "YGAP": {"description": "Vertical gap", "units": "mm", "record_type": "ao"},
+        "XIN": {"description": "X jaw in position", "units": "mm", "record_type": "ai"},
+        "XOUT": {"description": "X jaw out position", "units": "mm", "record_type": "ai"}
+      },
+      "naming_pattern": "COLL:{AREA}:{DEVICE_NUM}:{SIGNAL}",
+      "physical_description": "Adjustable aperture for beam collimation"
+    },
+    "SOLE": {
+      "full_name": "Solenoid",
+      "category": "beam_transport",
+      "function": "Provides axial magnetic focusing",
+      "typical_signals": {
+        "BDES": {"description": "Desired magnetic field", "units": "kG", "record_type": "ao"},
+        "BACT": {"description": "Actual magnetic field", "units": "kG", "record_type": "ai"},
+        "IDES": {"description": "Desired current", "units": "A", "record_type": "ao"},
+        "IACT": {"description": "Actual current", "units": "A", "record_type": "ai"}
+      },
+      "naming_pattern": "SOLE:{AREA}:{DEVICE_NUM}:{SIGNAL}",
+      "physical_description": "Axially symmetric magnetic focusing element"
+    },
+    "GUNB": {
+      "full_name": "Gun Buncher",
+      "category": "rf_system",
+      "function": "Pre-bunches electron beam from gun",
+      "typical_signals": {
+        "ADES": {"description": "Desired amplitude", "units": "MV", "record_type": "ao"},
+        "AACT": {"description": "Actual amplitude", "units": "MV", "record_type": "ai"},
+        "PDES": {"description": "Desired phase", "units": "deg", "record_type": "ao"},
+        "PACT": {"description": "Actual phase", "units": "deg", "record_type": "ai"}
+      },
+      "naming_pattern": "GUNB:{AREA}:{DEVICE_NUM}:{SIGNAL}",
+      "physical_description": "RF bunching cavity after electron gun"
+    },
+    "EV01": {
+      "full_name": "Event System",
+      "category": "timing_system",
+      "function": "Controls timing and event distribution",
+      "typical_signals": {
+        "RG02_ACTRATE": {"description": "Rate generator 2 actual rate", "units": "Hz", "record_type": "mbbi"},
+        "CTRL_BEAMRATE": {"description": "Beam rate control", "units": "Hz", "record_type": "ao"}
+      },
+      "naming_pattern": "IOC:{AREA}:EV01:{SIGNAL}",
+      "physical_description": "Event timing and synchronization system"
+    }
+  },
+  "device_categories": {
+    "beam_diagnostics": {
+      "description": "Devices that measure beam properties",
+      "devices": ["BPMS", "TORO", "RFBX", "PROF"],
+      "color_code": "#4CAF50"
+    },
+    "beam_transport": {
+      "description": "Devices that guide and shape the beam",
+      "devices": ["QUAD", "XCOR", "YCOR", "BEND", "COLL", "SOLE"],
+      "color_code": "#2196F3"
+    },
+    "rf_system": {
+      "description": "RF acceleration and bunching systems",
+      "devices": ["KLYS", "GUNB"],
+      "color_code": "#FF9800"
+    },
+    "insertion_device": {
+      "description": "Devices that generate X-ray radiation",
+      "devices": ["UND"],
+      "color_code": "#9C27B0"
+    },
+    "timing_system": {
+      "description": "Timing and synchronization systems",
+      "devices": ["EV01"],
+      "color_code": "#F44336"
+    }
+  },
+  "signal_types": {
+    "position": {
+      "signals": ["X", "Y", "X1H", "Y1H"],
+      "typical_units": ["mm", "um"],
+      "description": "Beam position measurements"
+    },
+    "current": {
+      "signals": ["TMIT", "TMITBR", "CHRG"],
+      "typical_units": ["pC", "nC"],
+      "description": "Beam current and charge measurements"
+    },
+    "magnetic_field": {
+      "signals": ["BDES", "BACT", "BCON"],
+      "typical_units": ["kG", "kG-m"],
+      "description": "Magnetic field settings and readbacks"
+    },
+    "current_electrical": {
+      "signals": ["IDES", "IACT"],
+      "typical_units": ["A"],
+      "description": "Electrical current in magnets"
+    },
+    "rf_amplitude": {
+      "signals": ["ADES", "AACT"],
+      "typical_units": ["MV", "V"],
+      "description": "RF amplitude settings and measurements"
+    },
+    "rf_phase": {
+      "signals": ["PDES", "PACT"],
+      "typical_units": ["deg"],
+      "description": "RF phase settings and measurements"
+    },
+    "rf_power": {
+      "signals": ["PDES", "PACT"],
+      "typical_units": ["MW", "kW"],
+      "description": "RF power settings and measurements"
+    },
+    "mechanical": {
+      "signals": ["GAPDES", "GAPACT", "XGAP", "YGAP"],
+      "typical_units": ["mm"],
+      "description": "Mechanical position settings"
+    },
+    "beam_size": {
+      "signals": ["SIGMAX", "SIGMAY", "XRMS", "YRMS"],
+      "typical_units": ["um", "mm"],
+      "description": "Beam size measurements"
+    },
+    "control": {
+      "signals": ["KDES", "KACT"],
+      "typical_units": ["none"],
+      "description": "Control parameters"
+    }
+  },
+  "area_device_mapping": {
+    "GUN": ["GUNB", "SOLE", "EV01"],
+    "L0": ["KLYS", "BPMS", "TORO"],
+    "L1": ["KLYS", "BPMS", "TORO", "XCOR", "YCOR"],
+    "L2": ["KLYS", "BPMS", "TORO", "XCOR", "YCOR", "QUAD"],
+    "L3": ["KLYS", "BPMS", "TORO", "XCOR", "YCOR", "QUAD"],
+    "BC1": ["BPMS", "BEND", "XCOR", "YCOR"],
+    "BC2": ["BPMS", "BEND", "XCOR", "YCOR"],
+    "LTUH": ["BPMS", "QUAD", "XCOR", "YCOR"],
+    "UNDH": ["UND", "BPMS", "RFBX", "XCOR", "YCOR"],
+    "DMPH_1": ["BPMS", "TORO", "PROF"],
+    "DMPH_2": ["BPMS", "TORO"]
+  }
+}

@@ -1,0 +1,66 @@
+{
+  "areas": {
+    "DMPH": {
+      "beam_path": "CU_HXR",
+      "description": "HXR post-undulator line",
+      "z_range": [3718.483, 3734.407],
+      "sector": "92H",
+      "devices": {
+        "502": {
+          "z_position": 3718.483,
+          "z_uncertainty": 0.050
+        }
+      }
+    },
+    "LI23": {
+      "beam_path": "CU_HXR",
+      "description": "Linac Sector 23",
+      "z_range": [2300.0, 2400.0],
+      "sector": "23",
+      "devices": {
+        "21": {
+          "z_position": 2350.0,
+          "z_uncertainty": 1.0
+        }
+      }
+    },
+    "LTUH": {
+      "beam_path": "CU_HXR",
+      "description": "Hard X-ray undulator hall",
+      "z_range": [3200.0, 3700.0],
+      "sector": "LTUH",
+      "devices": {
+        "620": {
+          "z_position": 3400.0,
+          "z_uncertainty": 1.0
+        },
+        "755": {
+          "z_position": 3500.0,
+          "z_uncertainty": 1.0
+        }
+      }
+    },
+    "DMPS": {
+      "beam_path": "CU_HXR",
+      "description": "HXR dump line",
+      "z_range": [3750.0, 3800.0],
+      "sector": "DMPS",
+      "devices": {
+        "693": {
+          "z_position": 3770.0,
+          "z_uncertainty": 1.0
+        }
+      }
+    }
+  },
+  "beam_paths": {
+    "CU_HXR": {
+      "description": "Copper Hard X-ray line",
+      "sequence": ["LI20", "LI21", "LI22", "LI23", "LI24", "LTUH", "DMPH", "DMPS"]
+    },
+    "SC_SXR": {
+      "description": "Superconducting Soft X-ray line", 
+      "sequence": ["SCRF", "LTUS", "DMPS"]
+    }
+  }
+}

@@ -27,9 +27,5 @@ tmp/
 *.hdf5
 data/
 
-# Keep jsons for dicitionary logic
-!config/
-!config/**/*.json
-
 # Keep DataProvider/ - it has its own .gitignore
 # Keep README.md and other documentation files

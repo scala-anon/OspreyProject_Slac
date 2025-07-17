@@ -55,12 +55,15 @@ private:
     }
 
     // Helper function to check if string ends with suffix (C++11 compatible)
-    bool stringEndsWith(const std::string& str, const std::string& suffix) {
-        if (suffix.length() > str.length()) return false;
+    bool stringEndsWith(const std::string &str, const std::string &suffix)
+    {
+        if (suffix.length() > str.length())
+            return false;
         return str.compare(str.length() - suffix.length(), suffix.length(), suffix) == 0;
     }
 
-    std::string getCurrentTimeString() {
+    std::string getCurrentTimeString()
+    {
         auto now = std::chrono::system_clock::now();
         auto time_t = std::chrono::system_clock::to_time_t(now);
         std::ostringstream oss;
@@ -68,9 +71,12 @@ private:
         return oss.str();
     }
 
-    void parseGlobalOptions(const std::vector<std::string>& args) {
-        for (size_t i = 0; i < args.size(); ++i) {
-            if (args[i] == "--server" && i + 1 < args.size()) {
+    void parseGlobalOptions(const std::vector<std::string> &args)
+    {
+        for (size_t i = 0; i < args.size(); ++i)
+        {
+            if (args[i] == "--server" && i + 1 < args.size())
+            {
                 server_address_ = args[i + 1];
             }
         }
@@ -83,16 +89,18 @@ private:
         return cli_dir / tool_name;
     }
 
-    int runExternalTool(const std::string& tool_name, const std::vector<std::string>& args) {
+    int runExternalTool(const std::string &tool_name, const std::vector<std::string> &args)
+    {
         std::string cmd = getToolPath(tool_name);
-        
-        for (size_t i = 0; i < args.size(); ++i) {
+
+        for (size_t i = 0; i < args.size(); ++i)
+        {
             cmd += " \"" + args[i] + "\"";
         }
-        
+
         std::cout << "DELEGATING TO BACKEND TOOL\n";
         std::cout << "Executing: " << tool_name << "\n\n";
-        
+
         return system(cmd.c_str());
     }
 
@@ -136,9 +144,10 @@ public:
         std::cout << "  tools mongo_to_npy          Access ML export tool directly\n\n";
     }
 
-    void showCommandHelp(const std::string& command)
+    void showCommandHelp(const std::string &command)
     {
-        if (command == "ingest") {
+        if (command == "ingest")
+        {
             std::cout << "INGEST COMMAND - Convert H5 files to MongoDB\n\n";
             std::cout << "USAGE: DataProvider_CLI ingest <h5_directory> [OPTIONS]\n\n";
             std::cout << "OPTIONS:\n";
@@ -153,8 +162,9 @@ public:
             std::cout << "EXAMPLES:\n";
             std::cout << "  DataProvider_CLI ingest /data/h5_files/ --streaming\n";
             std::cout << "  DataProvider_CLI ingest /data/lcls/ --project=CoAD --device=BPMS\n\n";
-
-        } else if (command == "discover") {
+        }
+        else if (command == "discover")
+        {
             std::cout << "DISCOVER COMMAND - Find available PVs in database\n\n";
             std::cout << "USAGE: DataProvider_CLI discover [PATTERN/TYPE] [OPTIONS]\n\n";
             std::cout << "PATTERN/TYPE:\n";
@@ -171,8 +181,9 @@ public:
             std::cout << "  DataProvider_CLI discover\n";
             std::cout << "  DataProvider_CLI discover bpm\n";
             std::cout << "  DataProvider_CLI discover \".*LI20.*\" --details\n\n";
-
-        } else if (command == "query") {
+        }
+        else if (command == "query")
+        {
             std::cout << "QUERY COMMAND - Query and decode PV data\n\n";
             std::cout << "USAGE: DataProvider_CLI query <PVS/PATTERN> [OPTIONS]\n\n";
             std::cout << "PVS/PATTERN:\n";
@@ -195,8 +206,9 @@ public:
             std::cout << "  DataProvider_CLI query \".*BPM.*\" --start 1750690485 --end 1750706894\n";
             std::cout << "  DataProvider_CLI query BPMS --full-range --max-points 5\n";
             std::cout << "  DataProvider_CLI query TMIT --last 6h --stats-only\n\n";
-
-        } else if (command == "export") {
+        }
+        else if (command == "export")
+        {
             std::cout << "EXPORT COMMAND - Export data for ML and analysis\n\n";
             std::cout << "USAGE: DataProvider_CLI export <TARGET> [OPTIONS]\n\n";
             std::cout << "TARGET:\n";
@@ -212,8 +224,9 @@ public:
             std::cout << "  DataProvider_CLI export \".*BPM.*\" --format=numpy\n";
             std::cout << "  DataProvider_CLI export BPMS --full-range --format=csv\n";
             std::cout << "  DataProvider_CLI export all --format=pytorch --name=full_dataset\n\n";
-
-        } else {
+        }
+        else
+        {
             std::cout << "No help available for command: " << command << std::endl;
             std::cout << "Use 'DataProvider_CLI help' for general help.\n";
         }
@@ -260,35 +273,46 @@ public:
         std::cout << "   DataProvider_CLI query \".*TMIT.*\" --last 1h --format=csv\n\n";
     }
 
-    int runStatus(const std::vector<std::string>& args) {
+    int runStatus(const std::vector<std::string> &args)
+    {
         std::cout << "SYSTEM STATUS\n\n";
 
         bool all_good = true;
 
         // Test connections
-        try {
+        try
+        {
             QueryClient queryClient(config_["query_server"]);
             std::cout << "Query server (" << config_["query_server"] << "): Connected\n";
-        } catch (const std::exception& e) {
+        }
+        catch (const std::exception &e)
+        {
             std::cout << "Query server (" << config_["query_server"] << "): FAILED - " << e.what() << "\n";
             all_good = false;
         }
 
-        try {
+        try
+        {
             IngestClient ingestClient(config_["ingest_server"]);
             std::cout << "Ingest server (" << config_["ingest_server"] << "): Connected\n";
-        } catch (const std::exception& e) {
+        }
+        catch (const std::exception &e)
+        {
             std::cout << "Ingest server (" << config_["ingest_server"] << "): FAILED - " << e.what() << "\n";
             all_good = false;
         }
 
         // Check tool availability
         std::vector<std::string> tools = {"h5_to_dp", "data_decoder", "mongo_to_npy"};
-        for (const auto& tool : tools) {
+        for (const auto &tool : tools)
+        {
             std::string path = getToolPath(tool);
-            if (std::filesystem::exists(path)) {
+            if (std::filesystem::exists(path))
+            {
                 std::cout << "Tool " << tool << ": Available\n";
-            } else {
+            }
+            else
+            {
                 std::cout << "Tool " << tool << ": NOT FOUND at " << path << "\n";
                 all_good = false;
             }
@@ -298,8 +322,10 @@ public:
         return all_good ? 0 : 1;
     }
 
-    int runDebug(const std::vector<std::string>& args) {
-        if (args.size() < 2) {
+    int runDebug(const std::vector<std::string> &args)
+    {
+        if (args.size() < 2)
+        {
             std::cout << "Debug commands:\n";
             std::cout << "  connection    Test server connections\n";
             std::cout << "  query <pv>    Show raw query response\n";
@@ -309,23 +335,32 @@ public:
 
         std::string debug_cmd = args[1];
 
-        if (debug_cmd == "connection") {
+        if (debug_cmd == "connection")
+        {
             return runStatus(args);
-        } else if (debug_cmd == "query" && args.size() > 2) {
+        }
+        else if (debug_cmd == "query" && args.size() > 2)
+        {
             // Delegate to data_decoder raw command
             std::vector<std::string> decoder_args = {"raw", args[2], "--server", server_address_};
             return runExternalTool("data_decoder", decoder_args);
-        } else if (debug_cmd == "memory") {
+        }
+        else if (debug_cmd == "memory")
+        {
             std::cout << "Memory debugging not implemented yet.\n";
             return 0;
-        } else {
+        }
+        else
+        {
             std::cerr << "Unknown debug command: " << debug_cmd << std::endl;
             return 1;
         }
     }
 
-    int runToolsAccess(const std::vector<std::string>& args) {
-        if (args.size() < 2) {
+    int runToolsAccess(const std::vector<std::string> &args)
+    {
+        if (args.size() < 2)
+        {
             std::cout << "EXPERT TOOLS\n\n";
             std::cout << "Available tools:\n";
             std::cout << "  h5_to_dp        H5 data ingestion tool\n";
@@ -337,22 +372,25 @@ public:
         }
 
         std::string tool_name = args[1];
-        
+
         // Validate tool exists
         std::vector<std::string> valid_tools = {"h5_to_dp", "data_decoder", "mongo_to_npy"};
-        if (std::find(valid_tools.begin(), valid_tools.end(), tool_name) == valid_tools.end()) {
+        if (std::find(valid_tools.begin(), valid_tools.end(), tool_name) == valid_tools.end())
+        {
             std::cerr << "Unknown tool: " << tool_name << std::endl;
             return 1;
         }
 
         // Pass remaining args to the tool
         std::vector<std::string> tool_args(args.begin() + 2, args.end());
-        
+
         return runExternalTool(tool_name, tool_args);
     }
 
-    int runIngest(const std::vector<std::string>& args) {
-        if (args.size() < 2) {
+    int runIngest(const std::vector<std::string> &args)
+    {
+        if (args.size() < 2)
+        {
             std::cerr << "Usage: DataProvider_CLI ingest <h5_directory> [options]" << std::endl;
             std::cerr << "Use 'DataProvider_CLI ingest --help' for detailed help." << std::endl;
             return 1;
@@ -366,27 +404,31 @@ public:
         h5_args.push_back(args[1]); // h5_directory
 
         // Parse and transform options
-        for (size_t i = 2; i < args.size(); ++i) {
-            const std::string& arg = args[i];
-            
-            if (arg == "--help") {
+        for (size_t i = 2; i < args.size(); ++i)
+        {
+            const std::string &arg = args[i];
+
+            if (arg == "--help")
+            {
                 showCommandHelp("ingest");
                 return 0;
             }
-            
+
             // Pass through compatible options
-            if (arg.find("--project=") == 0 || 
-                arg.find("--device=") == 0 || 
+            if (arg.find("--project=") == 0 ||
+                arg.find("--device=") == 0 ||
                 arg.find("--device-area=") == 0 ||
                 arg.find("--batch-size=") == 0 ||
                 arg.find("--max-signals=") == 0 ||
                 arg == "--streaming" ||
                 arg == "--local-only" ||
-                arg == "--show-filters") {
+                arg == "--show-filters")
+            {
                 h5_args.push_back(arg);
             }
             // Transform server option
-            else if (arg == "--server" && i + 1 < args.size()) {
+            else if (arg == "--server" && i + 1 < args.size())
+            {
                 h5_args.push_back("--mldp-server=" + args[i + 1]);
                 i++; // skip next arg
             }
@@ -394,14 +436,16 @@ public:
 
         // Add default streaming if not specified
         if (std::find(h5_args.begin(), h5_args.end(), "--streaming") == h5_args.end() &&
-            std::find(h5_args.begin(), h5_args.end(), "--local-only") == h5_args.end()) {
+            std::find(h5_args.begin(), h5_args.end(), "--local-only") == h5_args.end())
+        {
             h5_args.push_back("--streaming");
         }
 
         return runExternalTool("h5_to_dp", h5_args);
     }
 
-    int runDiscover(const std::vector<std::string>& args) {
+    int runDiscover(const std::vector<std::string> &args)
+    {
         std::cout << "PV DISCOVERY\n\n";
 
         // Handle user-friendly patterns
@@ -410,25 +454,41 @@ public:
         bool details = false;
         std::string group_by = "";
 
-        for (size_t i = 1; i < args.size(); ++i) {
-            const std::string& arg = args[i];
-            
-            if (arg == "--help") {
+        for (size_t i = 1; i < args.size(); ++i)
+        {
+            const std::string &arg = args[i];
+
+            if (arg == "--help")
+            {
                 showCommandHelp("discover");
                 return 0;
-            } else if (arg == "--count-only") {
+            }
+            else if (arg == "--count-only")
+            {
                 count_only = true;
-            } else if (arg == "--details") {
+            }
+            else if (arg == "--details")
+            {
                 details = true;
-            } else if (arg.find("--group-by=") == 0) {
+            }
+            else if (arg.find("--group-by=") == 0)
+            {
                 group_by = arg.substr(11);
-            } else if (arg == "bmp" || arg == "bpm") {
+            }
+            else if (arg == "bmp" || arg == "bpm")
+            {
                 pattern = ".*BPM.*";
-            } else if (arg == "klys" || arg == "klystron") {
+            }
+            else if (arg == "klys" || arg == "klystron")
+            {
                 pattern = ".*KLYS.*";
-            } else if (arg == "tmit" || arg == "charge") {
+            }
+            else if (arg == "tmit" || arg == "charge")
+            {
                 pattern = ".*TMIT.*";
-            } else if (arg[0] != '-') {
+            }
+            else if (arg[0] != '-')
+            {
                 pattern = arg;
             }
         }
@@ -452,12 +512,80 @@ public:
             {
                 const auto &result = response.metadataresult();
                 std::cout << "\nFound " << result.pvinfos_size() << " PVs matching pattern: " << pattern << "\n";
-                
-                if (count_only) {
+
+                if (count_only)
+                {
                     return 0;
                 }
 
-                if (group_by.empty()) {
+                if (details)
+                {
+                    // DETAILS VIEW - Show comprehensive metadata including time ranges
+                    std::cout << "\nDETAILED PV METADATA\n";
+                    std::cout << std::string(80, '=') << "\n";
+
+                    for (int i = 0; i < result.pvinfos_size(); ++i)
+                    {
+                        const auto &pv_info = result.pvinfos(i);
+
+                        std::cout << "\n[" << (i + 1) << "] " << pv_info.pvname() << "\n";
+                        std::cout << std::string(50, '-') << "\n";
+
+                        // Basic info
+                        std::cout << "Buckets: " << pv_info.numbuckets() << "\n";
+                        std::cout << "Data Type: " << pv_info.lastbucketdatatype() << "\n";
+
+                        // Time range information
+                        if (pv_info.has_firstdatatimestamp())
+                        {
+                            uint64_t first_time = pv_info.firstdatatimestamp().epochseconds();
+                            std::cout << "First Data: " << first_time << " (";
+
+                            // Convert to human readable
+                            auto time_t_val = static_cast<std::time_t>(first_time);
+                            std::cout << std::put_time(std::localtime(&time_t_val), "%Y-%m-%d %H:%M:%S") << ")\n";
+                        }
+
+                        if (pv_info.has_lastdatatimestamp())
+                        {
+                            uint64_t last_time = pv_info.lastdatatimestamp().epochseconds();
+                            std::cout << "Last Data: " << last_time << " (";
+
+                            // Convert to human readable
+                            auto time_t_val = static_cast<std::time_t>(last_time);
+                            std::cout << std::put_time(std::localtime(&time_t_val), "%Y-%m-%d %H:%M:%S") << ")\n";
+                        }
+
+                        // Calculate duration if both timestamps exist
+                        if (pv_info.has_firstdatatimestamp() && pv_info.has_lastdatatimestamp())
+                        {
+                            uint64_t duration = pv_info.lastdatatimestamp().epochseconds() -
+                                                pv_info.firstdatatimestamp().epochseconds();
+                            uint64_t hours = duration / 3600;
+                            uint64_t minutes = (duration % 3600) / 60;
+                            uint64_t seconds = duration % 60;
+                            std::cout << "Duration: " << hours << "h " << minutes << "m " << seconds << "s\n";
+                        }
+
+                        // Additional bucket info
+                        if (pv_info.lastbucketsamplecount() > 0)
+                        {
+                            std::cout << "Last Bucket Samples: " << pv_info.lastbucketsamplecount() << "\n";
+                        }
+
+                        if (pv_info.lastbucketsampleperiod() > 0)
+                        {
+                            double sample_rate = 1000000000.0 / pv_info.lastbucketsampleperiod(); // Convert from nanoseconds
+                            std::cout << "Sample Rate: " << std::fixed << std::setprecision(2) << sample_rate << " Hz\n";
+                        }
+
+                        // Timestamps type
+                        std::cout << "Timestamp Type: " << pv_info.lastbuckettimestampstype() << "\n";
+                    }
+                }
+                else if (group_by.empty())
+                {
+                    // NORMAL VIEW - Simple table
                     std::cout << "\nNo.  PV Name                             Buckets  Type\n";
                     std::cout << "---  -----------------------------------  -------  ------------\n";
 
@@ -469,29 +597,40 @@ public:
                                   << std::setw(7) << std::right << pv_info.numbuckets() << "  "
                                   << std::setw(12) << std::left << pv_info.lastbucketdatatype() << "\n";
                     }
-                } else {
-                    // Group by device type (simple grouping)
+                }
+                else
+                {
+                    // GROUP BY VIEW - Existing grouping logic
                     std::map<std::string, std::vector<std::string>> groups;
-                    for (int i = 0; i < result.pvinfos_size(); ++i) {
+                    for (int i = 0; i < result.pvinfos_size(); ++i)
+                    {
                         const auto &pv_info = result.pvinfos(i);
                         std::string pv_name = pv_info.pvname();
-                        
+
                         // Simple device type extraction
                         std::string device_type = "OTHER";
-                        if (pv_name.find("BPM") != std::string::npos) device_type = "BPM";
-                        else if (pv_name.find("KLYS") != std::string::npos) device_type = "KLYS";
-                        else if (pv_name.find("TMIT") != std::string::npos) device_type = "TMIT";
-                        else if (pv_name.find("QUAD") != std::string::npos) device_type = "QUAD";
-                        
+                        if (pv_name.find("BPM") != std::string::npos)
+                            device_type = "BPM";
+                        else if (pv_name.find("KLYS") != std::string::npos)
+                            device_type = "KLYS";
+                        else if (pv_name.find("TMIT") != std::string::npos)
+                            device_type = "TMIT";
+                        else if (pv_name.find("QUAD") != std::string::npos)
+                            device_type = "QUAD";
+
                         groups[device_type].push_back(pv_name);
                     }
 
-                    for (const auto& [device_type, pvs] : groups) {
-                        std::cout << "\n" << device_type << " (" << pvs.size() << " PVs):\n";
-                        for (size_t i = 0; i < pvs.size() && i < 5; ++i) {
+                    for (const auto &[device_type, pvs] : groups)
+                    {
+                        std::cout << "\n"
+                                  << device_type << " (" << pvs.size() << " PVs):\n";
+                        for (size_t i = 0; i < pvs.size() && i < 5; ++i)
+                        {
                             std::cout << "  " << pvs[i] << "\n";
                         }
-                        if (pvs.size() > 5) {
+                        if (pvs.size() > 5)
+                        {
                             std::cout << "  ... and " << (pvs.size() - 5) << " more\n";
                         }
                     }
@@ -507,8 +646,10 @@ public:
         }
     }
 
-    int runQuery(const std::vector<std::string>& args) {
-        if (args.size() < 2) {
+    int runQuery(const std::vector<std::string> &args)
+    {
+        if (args.size() < 2)
+        {
             std::cerr << "Usage: DataProvider_CLI query <pvs/pattern> [options]" << std::endl;
             std::cerr << "Use 'DataProvider_CLI query --help' for detailed help." << std::endl;
             return 1;
@@ -521,87 +662,143 @@ public:
 
         std::string target = args[1];
 
+        // Check if --full-range is specified (affects command choice)
+        bool has_full_range = false;
+        for (size_t i = 2; i < args.size(); ++i)
+        {
+            if (args[i] == "--full-range")
+            {
+                has_full_range = true;
+                break;
+            }
+        }
+
         // Better logic for determining command type
         bool is_regex_pattern = target.find(".*") != std::string::npos ||
-                               target.find("[") != std::string::npos ||
-                               target.find("^") != std::string::npos ||
-                               target.find("$") != std::string::npos;
+                                target.find("[") != std::string::npos ||
+                                target.find("^") != std::string::npos ||
+                                target.find("$") != std::string::npos;
 
         bool is_comma_separated = target.find(",") != std::string::npos;
 
         // Check if it looks like a device type (short, all caps, no special chars)
         bool looks_like_device_type = target.length() <= 10 &&
-                                     target.find_first_not_of("ABCDEFGHIJKLMNOPQRSTUVWXYZ_") == std::string::npos &&
-                                     !is_comma_separated;
+                                      target.find_first_not_of("ABCDEFGHIJKLMNOPQRSTUVWXYZ_") == std::string::npos &&
+                                      !is_comma_separated;
 
-        if (is_regex_pattern) {
-            // It's a regex pattern - use pattern command to get data
+        // For --full-range, we need to use pattern command to get metadata
+        if (has_full_range && !is_comma_separated)
+        {
+            // Use pattern command for full-range queries (even single PVs)
             decoder_args.push_back("pattern");
-            decoder_args.push_back(target);
-        } else if (is_comma_separated || target.find("_") != std::string::npos) {
-            // It's comma-separated PVs or looks like a full PV name (contains underscore)
-            decoder_args.push_back("decode");
-            decoder_args.push_back(target);
-        } else if (looks_like_device_type) {
-            // It's a device type like "BPMS", "KLYS", etc. - use pattern to get data
-            decoder_args.push_back("pattern");
-            decoder_args.push_back(".*" + target + ".*");
-        } else {
-            // Default to decode for full PV names
-            decoder_args.push_back("decode");
-            decoder_args.push_back(target);
+            if (is_regex_pattern)
+            {
+                decoder_args.push_back(target);
+            }
+            else if (looks_like_device_type)
+            {
+                decoder_args.push_back(".*" + target + ".*");
+            }
+            else
+            {
+                // Single PV name - convert to exact pattern
+                decoder_args.push_back("^" + target + "$");
+            }
+        }
+        else
+        {
+            // Normal logic for non-full-range queries
+            if (is_regex_pattern)
+            {
+                decoder_args.push_back("pattern");
+                decoder_args.push_back(target);
+            }
+            else if (is_comma_separated || target.find("_") != std::string::npos)
+            {
+                decoder_args.push_back("decode");
+                decoder_args.push_back(target);
+            }
+            else if (looks_like_device_type)
+            {
+                decoder_args.push_back("pattern");
+                decoder_args.push_back(".*" + target + ".*");
+            }
+            else
+            {
+                decoder_args.push_back("decode");
+                decoder_args.push_back(target);
+            }
         }
 
         // Transform common options
-        for (size_t i = 2; i < args.size(); ++i) {
-            const std::string& arg = args[i];
+        for (size_t i = 2; i < args.size(); ++i)
+        {
+            const std::string &arg = args[i];
 
-            if (arg == "--help") {
+            if (arg == "--help")
+            {
                 showCommandHelp("query");
                 return 0;
             }
 
             // Handle options that take values
-            if (arg == "--start" || arg == "--end" || arg == "--range" || arg == "--max-points") {
+            if (arg == "--start" || arg == "--end" || arg == "--range" || arg == "--max-points")
+            {
                 decoder_args.push_back(arg);
-                if (i + 1 < args.size()) {
+                if (i + 1 < args.size())
+                {
                     decoder_args.push_back(args[i + 1]);
                     i++; // Skip the next argument since we just processed it
                 }
             }
             // Handle options that start with -- and contain =
-            else if (arg.find("--") == 0 && arg.find("=") != std::string::npos) {
-                if (arg.find("--format=") == 0) {
+            else if (arg.find("--") == 0 && arg.find("=") != std::string::npos)
+            {
+                if (arg.find("--format=") == 0)
+                {
                     std::string format = arg.substr(9);
-                    if (format == "csv") {
+                    if (format == "csv")
+                    {
                         decoder_args.push_back("--csv");
                         decoder_args.push_back("query_output.csv");
-                    } else if (format == "json") {
+                    }
+                    else if (format == "json")
+                    {
                         decoder_args.push_back("--json");
                         decoder_args.push_back("query_output.json");
                     }
-                } else if (arg.find("--output=") == 0) {
+                }
+                else if (arg.find("--output=") == 0)
+                {
                     std::string output = arg.substr(9);
-                    if (stringEndsWith(output, ".csv")) {
+                    if (stringEndsWith(output, ".csv"))
+                    {
                         decoder_args.push_back("--csv");
                         decoder_args.push_back(output);
-                    } else if (stringEndsWith(output, ".json")) {
+                    }
+                    else if (stringEndsWith(output, ".json"))
+                    {
                         decoder_args.push_back("--json");
                         decoder_args.push_back(output);
                     }
-                } else {
+                }
+                else
+                {
                     // Pass through other --option=value arguments as-is
                     decoder_args.push_back(arg);
                 }
             }
             // Handle options that are just flags (no values)
-            else if (arg == "--stats-only" || arg == "--no-serialized" || arg == "--quiet" || arg == "--full-range") {
+            else if (arg == "--stats-only" || arg == "--no-serialized" || arg == "--quiet" || arg == "--full-range")
+            {
                 decoder_args.push_back(arg);
             }
             // Handle --last which takes a value
-            else if (arg == "--last") {
+            else if (arg == "--last")
+            {
                 decoder_args.push_back(arg);
-                if (i + 1 < args.size()) {
+                if (i + 1 < args.size())
+                {
                     decoder_args.push_back(args[i + 1]);
                     i++; // Skip the next argument
                 }
@@ -613,15 +810,18 @@ public:
         decoder_args.push_back(server_address_);
 
         // Add --no-serialized by default to avoid UTF-8 issues
-        if (std::find(decoder_args.begin(), decoder_args.end(), "--no-serialized") == decoder_args.end()) {
+        if (std::find(decoder_args.begin(), decoder_args.end(), "--no-serialized") == decoder_args.end())
+        {
             decoder_args.push_back("--no-serialized");
         }
 
         return runExternalTool("data_decoder", decoder_args);
     }
 
-    int runExport(const std::vector<std::string>& args) {
-        if (args.size() < 2) {
+    int runExport(const std::vector<std::string> &args)
+    {
+        if (args.size() < 2)
+        {
             std::cerr << "Usage: DataProvider_CLI export <target> [options]" << std::endl;
             std::cerr << "Use 'DataProvider_CLI export --help' for detailed help." << std::endl;
             return 1;
@@ -630,49 +830,123 @@ public:
         std::cout << "ML DATA EXPORT\n";
         std::cout << "Exporting data for ML/analysis...\n\n";
 
+        // Check if user provided time range options
+        bool has_time_range = false;
+        bool has_full_range = false;
+        for (size_t i = 2; i < args.size(); ++i)
+        {
+            const std::string &arg = args[i];
+            if (arg == "--start" || arg == "--end" || arg == "--last" || arg == "--range" || arg == "--full-range")
+            {
+                has_time_range = true;
+                if (arg == "--full-range")
+                {
+                    has_full_range = true;
+                }
+                break;
+            }
+        }
+
+        std::string target = args[1];
+
+        // For specific PVs or patterns, require time range specification
+        bool is_specific_target = (target != "all" &&
+                                   (target.find("_") != std::string::npos ||  // Looks like PV name
+                                    target.find(".*") != std::string::npos || // Pattern
+                                    target.find(",") != std::string::npos));  // PV list
+
+        if (is_specific_target && !has_time_range)
+        {
+            std::cout << "ERROR: Time range required for specific PV/pattern exports.\n\n";
+            std::cout << "Choose from these time range options:\n";
+            std::cout << "  --full-range               Use complete available time range\n";
+            std::cout << "  --start TIME --end TIME    Specific time range (Unix or ISO format)\n";
+            std::cout << "  --last DURATION            Last N duration (e.g., '2h', '30m', '1d')\n";
+            std::cout << "  --range HOURS              Last N hours (default: 1)\n\n";
+            std::cout << "Examples:\n";
+            std::cout << "  DataProvider_CLI export " << target << " --full-range\n";
+            std::cout << "  DataProvider_CLI export " << target << " --last 6h\n";
+            std::cout << "  DataProvider_CLI export " << target << " --start 1750690485 --end 1750706894\n\n";
+            return 1;
+        }
+
         // Transform unified options to mongo_to_npy options
         std::vector<std::string> npy_args;
-        
-        std::string target = args[1];
-        
+
         // Map user-friendly targets to mongo_to_npy commands
-        if (target == "all") {
+        if (target == "all")
+        {
             npy_args.push_back("export-all");
-        } else if (target.find(",") != std::string::npos) {
+        }
+        else if (target.find(",") != std::string::npos)
+        {
             // Comma-separated PVs
             npy_args.push_back("export-pvs");
             npy_args.push_back(target);
-        } else if (target.find(".*") != std::string::npos) {
+        }
+        else if (target.find(".*") != std::string::npos)
+        {
             // Pattern
             npy_args.push_back("export-pattern");
             npy_args.push_back(target);
-        } else {
-            // Assume named dataset
+        }
+        else if (target.find("_") != std::string::npos)
+        {
+            // FIXED: Single PV name (contains underscore) - treat as single PV export
+            npy_args.push_back("export-pvs");
+            npy_args.push_back(target);
+        }
+        else
+        {
+            // Assume named dataset for short names without underscores
             npy_args.push_back("export-dataset");
-            npy_args.push_back("\".*\"");  // Pattern for all
+            npy_args.push_back("\".*\""); // Pattern for all
             npy_args.push_back(target);   // Dataset name
         }
 
         // Parse additional options
-        for (size_t i = 2; i < args.size(); ++i) {
-            const std::string& arg = args[i];
-            
-            if (arg == "--help") {
+        for (size_t i = 2; i < args.size(); ++i)
+        {
+            const std::string &arg = args[i];
+
+            if (arg == "--help")
+            {
                 showCommandHelp("export");
                 return 0;
             }
-            
-            if (arg == "--timeseries") {
+
+            // Pass through time range options
+            if (arg == "--start" || arg == "--end" || arg == "--last" || arg == "--range")
+            {
+                npy_args.push_back(arg);
+                if (i + 1 < args.size() && args[i + 1][0] != '-')
+                {
+                    npy_args.push_back(args[i + 1]);
+                    i++; // Skip the next argument
+                }
+            }
+            else if (arg == "--full-range")
+            {
+                npy_args.push_back(arg);
+            }
+            else if (arg == "--timeseries")
+            {
                 // Switch to timeseries export
                 npy_args[0] = "export-timeseries";
-            } else if (arg.find("--sequence-length=") == 0) {
+            }
+            else if (arg.find("--sequence-length=") == 0)
+            {
                 std::string seq_len = arg.substr(18);
-                if (npy_args[0] == "export-timeseries") {
+                if (npy_args[0] == "export-timeseries")
+                {
                     npy_args.push_back(seq_len);
                 }
-            } else if (arg.find("--name=") == 0) {
+            }
+            else if (arg.find("--name=") == 0)
+            {
                 std::string name = arg.substr(7);
-                if (npy_args[0] != "export-dataset") {
+                if (npy_args[0] != "export-dataset")
+                {
                     // Convert to dataset export
                     std::string old_target = npy_args.size() > 1 ? npy_args[1] : "\".*\"";
                     npy_args.clear();
@@ -680,6 +954,11 @@ public:
                     npy_args.push_back(old_target);
                     npy_args.push_back(name);
                 }
+            }
+            else if (arg.find("--format=") == 0)
+            {
+                // Pass through format options
+                npy_args.push_back(arg);
             }
             // Other options are handled by mongo_to_npy internally
         }
@@ -701,13 +980,15 @@ public:
         std::cout << "Press Ctrl+C to stop...\n\n";
 
         // Simple monitoring implementation
-        while (true) {
-            try {
+        while (true)
+        {
+            try
+            {
                 std::cout << "--- Update: " << getCurrentTimeString() << " ---\n";
 
                 // Use the direct query implementation
                 QueryClient queryClient(server_address_);
-                
+
                 // For monitoring, get recent data (last 5 minutes)
                 uint64_t now = std::chrono::system_clock::now().time_since_epoch().count() / 1000000000;
                 uint64_t start_time = now - 300; // 5 minutes ago
@@ -719,49 +1000,57 @@ public:
                 auto request = makeQueryDataRequest(pv_names, begin_time, end_time_ts, true);
                 auto response = queryClient.queryData(request);
 
-                if (response.has_querydata()) {
+                if (response.has_querydata())
+                {
                     const auto &query_data = response.querydata();
                     std::cout << "Data buckets: " << query_data.databuckets_size() << "\n";
-                    
-                    for (int i = 0; i < std::min(1, query_data.databuckets_size()); ++i) {
+
+                    for (int i = 0; i < std::min(1, query_data.databuckets_size()); ++i)
+                    {
                         const auto &bucket = query_data.databuckets(i);
-                        if (bucket.has_datacolumn()) {
+                        if (bucket.has_datacolumn())
+                        {
                             const auto &column = bucket.datacolumn();
-                            std::cout << "PV: " << column.name() 
+                            std::cout << "PV: " << column.name()
                                       << ", Points: " << column.datavalues_size() << "\n";
-                            
+
                             // Show latest value
-                            if (column.datavalues_size() > 0) {
+                            if (column.datavalues_size() > 0)
+                            {
                                 const auto &latest = column.datavalues(column.datavalues_size() - 1);
                                 std::cout << "Latest value: ";
-                                switch (latest.value_case()) {
-                                    case DataValue::kDoubleValue:
-                                        std::cout << latest.doublevalue();
-                                        break;
-                                    case DataValue::kFloatValue:
-                                        std::cout << latest.floatvalue();
-                                        break;
-                                    case DataValue::kLongValue:
-                                        std::cout << latest.longvalue();
-                                        break;
-                                    case DataValue::kIntValue:
-                                        std::cout << latest.intvalue();
-                                        break;
-                                    default:
-                                        std::cout << "?";
-                                        break;
+                                switch (latest.value_case())
+                                {
+                                case DataValue::kDoubleValue:
+                                    std::cout << latest.doublevalue();
+                                    break;
+                                case DataValue::kFloatValue:
+                                    std::cout << latest.floatvalue();
+                                    break;
+                                case DataValue::kLongValue:
+                                    std::cout << latest.longvalue();
+                                    break;
+                                case DataValue::kIntValue:
+                                    std::cout << latest.intvalue();
+                                    break;
+                                default:
+                                    std::cout << "?";
+                                    break;
                                 }
                                 std::cout << "\n";
                             }
                         }
                     }
-                } else {
+                }
+                else
+                {
                     std::cout << "No data available\n";
                 }
 
                 std::this_thread::sleep_for(std::chrono::seconds(10));
-
-            } catch (const std::exception& e) {
+            }
+            catch (const std::exception &e)
+            {
                 std::cerr << "Monitor error: " << e.what() << std::endl;
                 std::this_thread::sleep_for(std::chrono::seconds(5));
             }
@@ -830,9 +1119,12 @@ public:
         // Help system
         if (command == "help" || command == "--help")
         {
-            if (args.size() > 1) {
+            if (args.size() > 1)
+            {
                 showCommandHelp(args[1]);
-            } else {
+            }
+            else
+            {
                 showHelp();
             }
             return 0;

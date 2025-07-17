@@ -26,6 +26,10 @@ Makefile
 *.grpc.pb.cc
 *.grpc.pb.h
 
+# IMPORTANT: Exceptions must come BEFORE general rules
+!config/
+!config/**/*.json
+
 # Data export files (from decode operations)
 *.csv
 *.json
@@ -57,9 +61,6 @@ __pycache__/
 *.pyc
 *.pyo
 
-# keep json for dictionary logic
-!config/
-!config/**/*.json
 # Keep these important files:
 # - CMakeLists.txt (all of them)
 # - build_dp.sh

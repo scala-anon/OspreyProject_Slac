@@ -2,11 +2,12 @@ cmake_minimum_required(VERSION 3.13)
 project(DataProvider LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 
-# Suppress verbose output
+# Suppress all output
 set(CMAKE_VERBOSE_MAKEFILE OFF)
 set(CMAKE_RULE_MESSAGES OFF)
+set(CMAKE_INSTALL_MESSAGE NEVER)
 
-# Create bin directory for executables only
+# Create directories
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/bin)
 
 # Set output directories
@@ -14,22 +15,24 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/bin)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 
-# Dependencies - quiet find
+# Find dependencies quietly
 find_package(Protobuf REQUIRED QUIET)
 find_package(HDF5 REQUIRED COMPONENTS CXX QUIET)
 
-# Optional dependencies
-set(CMAKE_PREFIX_PATH ${CMAKE_PREFIX_PATH} "$ENV{HOME}/local")
+# Check for nlohmann/json
 find_path(NLOHMANN_JSON_INCLUDE_DIR nlohmann/json.hpp
     PATHS $ENV{HOME}/local/include /usr/local/include /usr/include
-    NO_DEFAULT_PATH QUIET)
-find_library(XLSXWRITER_LIBRARY xlsxwriter
-    PATHS $ENV{HOME}/local/lib /usr/local/lib /usr/lib64 /usr/lib
     NO_DEFAULT_PATH QUIET)
 
 if(NLOHMANN_JSON_INCLUDE_DIR)
     add_definitions(-DHAVE_NLOHMANN_JSON)
 endif()
+
+# Optional xlsxwriter
+set(CMAKE_PREFIX_PATH ${CMAKE_PREFIX_PATH} "$ENV{HOME}/local")
+find_library(XLSXWRITER_LIBRARY xlsxwriter
+    PATHS $ENV{HOME}/local/lib /usr/local/lib /usr/lib64 /usr/lib
+    NO_DEFAULT_PATH QUIET)
 
 if(XLSXWRITER_LIBRARY)
     add_definitions(-DHAVE_XLSXWRITER)
@@ -44,24 +47,68 @@ include_directories(
     include
     include/clients
     include/parsers
+    include/tools
     ${CMAKE_BINARY_DIR}/proto
     ${HDF5_INCLUDE_DIRS}
     /usr/include
 )
 
-# Common sources
-set(COMMON_SOURCES
+if(NLOHMANN_JSON_INCLUDE_DIR)
+    include_directories(${NLOHMANN_JSON_INCLUDE_DIR})
+endif()
+
+# Client Libraries
+add_library(ingest_client_lib STATIC
     src/clients/ingest_client.cpp
-    src/clients/annotate_client.cpp
+)
+target_link_libraries(ingest_client_lib PUBLIC
+    myproto
+    grpc++
+    grpc
+    protobuf
+    absl_synchronization
+    absl_strings
+    absl_time
+    absl_status
+    absl_base
+)
+
+add_library(query_client_lib STATIC
     src/clients/query_client.cpp
+)
+target_link_libraries(query_client_lib PUBLIC
+    myproto
+    grpc++
+    grpc
+    protobuf
+    absl_synchronization
+    absl_strings
+    absl_time
+    absl_status
+    absl_base
+)
+
+# Parser Library
+add_library(parser_lib STATIC
     src/parsers/PacketParser.cpp
     src/parsers/h5_parser.cpp
-    src/parsers/mongo_to_npy_parser.cpp
-    src/parsers/data_decoder.cpp
+)
+target_link_libraries(parser_lib PUBLIC
+    ${HDF5_CXX_LIBRARIES}
+    ${HDF5_LIBRARIES}
+)
+
+# Combined interface library
+add_library(dp_clients INTERFACE)
+target_link_libraries(dp_clients INTERFACE
+    ingest_client_lib
+    query_client_lib
 )
 
 # Common libraries
 set(COMMON_LIBRARIES
+    dp_clients
+    parser_lib
     myproto
     ${HDF5_CXX_LIBRARIES}
     ${HDF5_LIBRARIES}
@@ -80,19 +127,35 @@ if(XLSXWRITER_LIBRARY)
 endif()
 
 # Executables
-add_executable(DataProvider_CLI apps/DataProvider_CLI.cpp ${COMMON_SOURCES})
-target_link_libraries(DataProvider_CLI PRIVATE ${COMMON_LIBRARIES})
-
-add_executable(h5_to_dp apps/h5_to_dp.cpp ${COMMON_SOURCES})
+add_executable(h5_to_dp apps/h5_to_dp.cpp)
 target_link_libraries(h5_to_dp PRIVATE ${COMMON_LIBRARIES})
 
-add_executable(data_decoder apps/data_decoder.cpp ${COMMON_SOURCES})
-target_link_libraries(data_decoder PRIVATE ${COMMON_LIBRARIES})
+# Examples
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/examples/spatial_enrichment_demo.cpp")
+    add_executable(spatial_enrichment_demo examples/spatial_enrichment_demo.cpp)
+    target_link_libraries(spatial_enrichment_demo PRIVATE ${COMMON_LIBRARIES})
+endif()
 
-add_executable(mongo_to_npy apps/mongo_to_npy.cpp ${COMMON_SOURCES})
-target_link_libraries(mongo_to_npy PRIVATE ${COMMON_LIBRARIES})
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/examples/spatial_query_demo.cpp")
+    add_executable(spatial_query_demo examples/spatial_query_demo.cpp)
+    target_link_libraries(spatial_query_demo PRIVATE ${COMMON_LIBRARIES})
+endif()
+
+# Config directory setup (silent)
+if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/config")
+    file(MAKE_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/config")
+    file(MAKE_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/config/dictionaries")
+endif()
 
 # Install targets
-install(TARGETS DataProvider_CLI h5_to_dp data_decoder mongo_to_npy
+install(TARGETS h5_to_dp
     RUNTIME DESTINATION bin
+)
+
+install(TARGETS dp_clients ingest_client_lib query_client_lib parser_lib
+    ARCHIVE DESTINATION lib
+)
+
+install(DIRECTORY include/ DESTINATION include/dp
+    FILES_MATCHING PATTERN "*.hpp" PATTERN "*.h"
 )

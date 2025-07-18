@@ -18,6 +18,7 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 # Find dependencies quietly
 find_package(Protobuf REQUIRED QUIET)
 find_package(HDF5 REQUIRED COMPONENTS CXX QUIET)
+find_package(CURL REQUIRED QUIET)
 
 # Check for nlohmann/json
 find_path(NLOHMANN_JSON_INCLUDE_DIR nlohmann/json.hpp
@@ -50,6 +51,7 @@ include_directories(
     include/tools
     ${CMAKE_BINARY_DIR}/proto
     ${HDF5_INCLUDE_DIRS}
+    ${CURL_INCLUDE_DIRS}
     /usr/include
 )
 
@@ -82,6 +84,22 @@ target_link_libraries(query_client_lib PUBLIC
     grpc++
     grpc
     protobuf
+    absl_synchronization
+    absl_strings
+    absl_time
+    absl_status
+    absl_base
+)
+
+add_library(archiver_client_lib STATIC
+    src/clients/archiver_client.cpp
+)
+target_link_libraries(archiver_client_lib PUBLIC
+    myproto
+    grpc++
+    grpc
+    protobuf
+    ${CURL_LIBRARIES}
     absl_synchronization
     absl_strings
     absl_time
@@ -123,6 +141,7 @@ add_library(dp_clients INTERFACE)
 target_link_libraries(dp_clients INTERFACE
     ingest_client_lib
     query_client_lib
+    archiver_client_lib
 )
 
 # Add metadata recovery to combined library if it exists
@@ -137,6 +156,7 @@ set(COMMON_LIBRARIES
     myproto
     ${HDF5_CXX_LIBRARIES}
     ${HDF5_LIBRARIES}
+    ${CURL_LIBRARIES}
     grpc++
     grpc
     protobuf
@@ -158,6 +178,12 @@ target_link_libraries(h5_to_dp PRIVATE ${COMMON_LIBRARIES})
 add_executable(query_pv apps/query_pv.cpp)
 target_link_libraries(query_pv PRIVATE ${COMMON_LIBRARIES})
 
+add_executable(archiver_to_dp apps/archiver_to_dp.cpp)
+target_link_libraries(archiver_to_dp PRIVATE ${COMMON_LIBRARIES})
+
+add_executable(query_state apps/query_state.cpp)
+target_link_libraries(query_state PRIVATE ${COMMON_LIBRARIES})
+
 # Examples
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/examples/metadata_recovery_example.cpp")
     add_executable(metadata_recovery_demo examples/metadata_recovery_example.cpp)
@@ -171,12 +197,12 @@ if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/config")
 endif()
 
 # Install targets
-install(TARGETS h5_to_dp query_pv
+install(TARGETS h5_to_dp query_pv archiver_to_dp query_state
     RUNTIME DESTINATION bin
 )
 
 # Install libraries including metadata recovery if available
-set(INSTALL_LIBS dp_clients ingest_client_lib query_client_lib parser_lib)
+set(INSTALL_LIBS dp_clients ingest_client_lib query_client_lib archiver_client_lib parser_lib)
 if(TARGET metadata_recovery_lib)
     list(APPEND INSTALL_LIBS metadata_recovery_lib)
 endif()

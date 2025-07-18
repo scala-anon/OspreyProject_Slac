@@ -18,7 +18,7 @@ struct H5FileMetadata {
     std::string full_path;
     uint64_t file_timestamp_seconds;
     bool valid_timestamp;
-    
+
     H5FileMetadata() : file_timestamp_seconds(0), valid_timestamp(false) {}
 };
 
@@ -33,7 +33,7 @@ struct SignalInfo {
     std::string matlab_class;         // From H5 attribute: "double"
     std::string units;                // Inferred: "MV/m"
     std::string signal_type;          // Inferred: "amplitude"
-    
+
     SignalInfo() : units("unknown"), signal_type("measurement") {}
 };
 
@@ -48,7 +48,7 @@ struct TimestampData {
     uint64_t start_time_nano;         // First timestamp nanoseconds
     uint64_t end_time_sec;            // Last timestamp seconds
     uint64_t end_time_nano;           // Last timestamp nanoseconds
-    
+
     TimestampData() : period_nanos(1000000000), is_regular_sampling(false), count(0),
                      start_time_sec(0), start_time_nano(0), end_time_sec(0), end_time_nano(0) {}
 };
@@ -59,8 +59,9 @@ struct SignalData {
     std::vector<double> values;       // Signal values
     std::shared_ptr<TimestampData> timestamps; // Shared timestamp reference
     H5FileMetadata file_metadata;     // Source file metadata
-    
-    SignalData() = default;
+    bool spatial_enrichment_ready;    // Flag for spatial enrichment
+
+    SignalData() : spatial_enrichment_ready(false) {}
     SignalData(const SignalData& other) = default;
     SignalData& operator=(const SignalData& other) = default;
     SignalData(SignalData&& other) = default;
@@ -72,74 +73,79 @@ class H5Parser {
 public:
     explicit H5Parser(const std::string& h5_directory_path);
     ~H5Parser();
-    
+
+    // Spatial enrichment control
+    void enableSpatialEnrichment(bool enable = true);
+    bool isSpatialEnrichmentEnabled() const { return spatial_enrichment_enabled_; }
+
     // Main parsing functions
     bool parseDirectory();
     bool parseFile(const std::string& filepath);
-    
+
     // Data access
     std::vector<SignalData> getAllSignals() const;
     std::vector<SignalData> getSignalsByDevice(const std::string& device) const;
     std::vector<SignalData> getSignalsByDeviceArea(const std::string& device_area) const;
     std::vector<SignalData> getSignalsByDeviceAttribute(const std::string& device_attribute) const;
     std::vector<SignalData> getSignalsByProject(const std::string& project) const;
-    
+
     // Individual signal lookup
     SignalData* findSignal(const std::string& signal_name);
     const SignalData* findSignal(const std::string& signal_name) const;
-    
+
     // Statistics and summary
     void printSummary() const;
     void printDetailedSummary() const;
     size_t getTotalSignals() const { return parsed_signals_.size(); }
     size_t getTotalFiles() const { return file_timestamps_.size(); }
-    
+
     // File metadata access
     std::vector<H5FileMetadata> getFileMetadata() const;
-    
+
 private:
     std::string h5_directory_;
     std::vector<SignalData> parsed_signals_;
     std::map<std::string, std::shared_ptr<TimestampData>> file_timestamps_; // filepath -> timestamps
-    
+    bool spatial_enrichment_enabled_;
+
     // File discovery and validation
     std::vector<std::string> discoverH5Files() const;
     bool matchesNamingConvention(const std::string& filepath) const;
-    
+
     // Filename parsing
     H5FileMetadata parseFilename(const std::string& filepath) const;
     uint64_t parseTimestamp(const std::string& date, const std::string& time) const;
-    
+
     // H5 file processing
     std::shared_ptr<TimestampData> extractTimestamps(H5::H5File& file) const;
     std::vector<std::string> getSignalDatasets(H5::H5File& file) const;
-    
+
     // Signal processing
     SignalInfo parseSignalName(const std::string& signal_name) const;
-    SignalData processSignal(H5::H5File& file, 
+    SignalData processSignal(H5::H5File& file,
                            const std::string& signal_name,
                            std::shared_ptr<TimestampData> timestamps,
                            const H5FileMetadata& file_metadata) const;
-    
+
     // H5 attribute reading
     std::string readStringAttribute(H5::DataSet& dataset, const std::string& attr_name) const;
-    
+
     // Timestamp analysis
-    uint64_t calculatePeriodNanos(const std::vector<uint64_t>& seconds, 
+    uint64_t calculatePeriodNanos(const std::vector<uint64_t>& seconds,
                                  const std::vector<uint64_t>& nanoseconds) const;
-    bool checkRegularSampling(const std::vector<uint64_t>& seconds, 
+    bool checkRegularSampling(const std::vector<uint64_t>& seconds,
                              const std::vector<uint64_t>& nanoseconds,
                              uint64_t expected_period) const;
-    
+
     // Unit and type inference
     std::string inferUnits(const std::string& device_attribute) const;
     std::string inferSignalType(const std::string& device_attribute) const;
-    
+
     // Validation
-    bool validateDataConsistency(const std::vector<double>& values, 
+    bool validateDataConsistency(const std::vector<double>& values,
                                const TimestampData& timestamps,
                                const std::string& signal_name) const;
-    
+
     // Utility functions
     void printDeviceSummary() const;
     void printDeviceAreaSummary() const;

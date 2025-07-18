@@ -60,6 +60,7 @@ endif()
 # Client Libraries
 add_library(ingest_client_lib STATIC
     src/clients/ingest_client.cpp
+    src/clients/spatial_analyzer.cpp
 )
 target_link_libraries(ingest_client_lib PUBLIC
     myproto
@@ -88,6 +89,25 @@ target_link_libraries(query_client_lib PUBLIC
     absl_base
 )
 
+# Metadata Recovery Library
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/clients/metadata_recovery.cpp")
+    add_library(metadata_recovery_lib STATIC
+        src/clients/metadata_recovery.cpp
+    )
+    target_link_libraries(metadata_recovery_lib PUBLIC
+        query_client_lib
+        myproto
+        grpc++
+        grpc
+        protobuf
+        absl_synchronization
+        absl_strings
+        absl_time
+        absl_status
+        absl_base
+    )
+endif()
+
 # Parser Library
 add_library(parser_lib STATIC
     src/parsers/PacketParser.cpp
@@ -104,6 +124,11 @@ target_link_libraries(dp_clients INTERFACE
     ingest_client_lib
     query_client_lib
 )
+
+# Add metadata recovery to combined library if it exists
+if(TARGET metadata_recovery_lib)
+    target_link_libraries(dp_clients INTERFACE metadata_recovery_lib)
+endif()
 
 # Common libraries
 set(COMMON_LIBRARIES
@@ -130,15 +155,13 @@ endif()
 add_executable(h5_to_dp apps/h5_to_dp.cpp)
 target_link_libraries(h5_to_dp PRIVATE ${COMMON_LIBRARIES})
 
-# Examples
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/examples/spatial_enrichment_demo.cpp")
-    add_executable(spatial_enrichment_demo examples/spatial_enrichment_demo.cpp)
-    target_link_libraries(spatial_enrichment_demo PRIVATE ${COMMON_LIBRARIES})
-endif()
+add_executable(query_pv apps/query_pv.cpp)
+target_link_libraries(query_pv PRIVATE ${COMMON_LIBRARIES})
 
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/examples/spatial_query_demo.cpp")
-    add_executable(spatial_query_demo examples/spatial_query_demo.cpp)
-    target_link_libraries(spatial_query_demo PRIVATE ${COMMON_LIBRARIES})
+# Examples
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/examples/metadata_recovery_example.cpp")
+    add_executable(metadata_recovery_demo examples/metadata_recovery_example.cpp)
+    target_link_libraries(metadata_recovery_demo PRIVATE ${COMMON_LIBRARIES})
 endif()
 
 # Config directory setup (silent)
@@ -148,11 +171,17 @@ if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/config")
 endif()
 
 # Install targets
-install(TARGETS h5_to_dp
+install(TARGETS h5_to_dp query_pv
     RUNTIME DESTINATION bin
 )
 
-install(TARGETS dp_clients ingest_client_lib query_client_lib parser_lib
+# Install libraries including metadata recovery if available
+set(INSTALL_LIBS dp_clients ingest_client_lib query_client_lib parser_lib)
+if(TARGET metadata_recovery_lib)
+    list(APPEND INSTALL_LIBS metadata_recovery_lib)
+endif()
+
+install(TARGETS ${INSTALL_LIBS}
     ARCHIVE DESTINATION lib
 )
 

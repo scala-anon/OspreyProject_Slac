@@ -42,10 +42,10 @@ jobs:
           protobuf-compiler-grpc \
           protobuf-compiler \
           libhdf5-dev \
-          libhdf5-cpp-103 \
           nlohmann-json3-dev \
           libmongoc-dev \
-          libmongocxx-dev
+          libmongocxx-dev \
+          netcat-openbsd
 
     - name: Test build with SLAC environment
       env:

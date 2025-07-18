@@ -4,273 +4,1575 @@
       "full_name": "Beam Position Monitor System",
       "category": "beam_diagnostics",
       "function": "Measures beam position and current",
+      "controllable": false,
       "typical_signals": {
         "X": {"description": "Horizontal position", "units": "mm", "record_type": "ai"},
         "Y": {"description": "Vertical position", "units": "mm", "record_type": "ai"},
         "TMIT": {"description": "Transmitted charge", "units": "pC", "record_type": "ai"},
-        "TMITBR": {"description": "Transmitted charge (broadcast)", "units": "pC", "record_type": "ai"}
+        "TMITBR": {"description": "Transmitted charge (broadcast)", "units": "pC", "record_type": "ai"},
+        "XAVG": {"description": "Horizontal average", "units": "mm", "record_type": "ai"},
+        "YAVG": {"description": "Vertical average", "units": "mm", "record_type": "ai"},
+        "XRMS": {"description": "Horizontal RMS", "units": "mm", "record_type": "ai"},
+        "YRMS": {"description": "Vertical RMS", "units": "mm", "record_type": "ai"}
       },
-      "naming_pattern": "BPMS:{AREA}:{DEVICE_NUM}:{SIGNAL}",
+      "naming_pattern": "BPMS:{AREA}:{POSITION}:{SIGNAL}",
       "physical_description": "Strip-line or cavity BPM for beam position measurement"
     },
     "QUAD": {
       "full_name": "Quadrupole Magnet",
-      "category": "beam_transport",
+      "category": "beam_transport_magnets",
       "function": "Focuses or defocuses the beam",
+      "controllable": true,
       "typical_signals": {
         "BDES": {"description": "Desired magnetic field", "units": "kG", "record_type": "ao"},
         "BACT": {"description": "Actual magnetic field", "units": "kG", "record_type": "ai"},
         "BCON": {"description": "Control magnetic field", "units": "kG", "record_type": "ao"},
         "IDES": {"description": "Desired current", "units": "A", "record_type": "ao"},
-        "IACT": {"description": "Actual current", "units": "A", "record_type": "ai"}
+        "IACT": {"description": "Actual current", "units": "A", "record_type": "ai"},
+        "VDES": {"description": "Desired voltage", "units": "V", "record_type": "ao"},
+        "VACT": {"description": "Actual voltage", "units": "V", "record_type": "ai"}
       },
-      "naming_pattern": "QUAD:{AREA}:{DEVICE_NUM}:{SIGNAL}",
+      "naming_pattern": "QUAD:{AREA}:{POSITION}:{SIGNAL}",
       "physical_description": "Electromagnetic quadrupole for beam focusing"
     },
     "XCOR": {
       "full_name": "Horizontal Corrector",
-      "category": "beam_transport", 
+      "category": "beam_transport_magnets",
       "function": "Corrects horizontal beam trajectory",
+      "controllable": true,
       "typical_signals": {
         "BDES": {"description": "Desired magnetic field", "units": "kG-m", "record_type": "ao"},
         "BACT": {"description": "Actual magnetic field", "units": "kG-m", "record_type": "ai"},
         "IDES": {"description": "Desired current", "units": "A", "record_type": "ao"},
         "IACT": {"description": "Actual current", "units": "A", "record_type": "ai"}
       },
-      "naming_pattern": "XCOR:{AREA}:{DEVICE_NUM}:{SIGNAL}",
+      "naming_pattern": "XCOR:{AREA}:{POSITION}:{SIGNAL}",
       "physical_description": "Horizontal steering dipole corrector"
     },
     "YCOR": {
       "full_name": "Vertical Corrector",
-      "category": "beam_transport",
-      "function": "Corrects vertical beam trajectory", 
+      "category": "beam_transport_magnets",
+      "function": "Corrects vertical beam trajectory",
+      "controllable": true,
       "typical_signals": {
         "BDES": {"description": "Desired magnetic field", "units": "kG-m", "record_type": "ao"},
         "BACT": {"description": "Actual magnetic field", "units": "kG-m", "record_type": "ai"},
         "IDES": {"description": "Desired current", "units": "A", "record_type": "ao"},
         "IACT": {"description": "Actual current", "units": "A", "record_type": "ai"}
       },
-      "naming_pattern": "YCOR:{AREA}:{DEVICE_NUM}:{SIGNAL}",
+      "naming_pattern": "YCOR:{AREA}:{POSITION}:{SIGNAL}",
       "physical_description": "Vertical steering dipole corrector"
     },
-    "KLYS": {
-      "full_name": "Klystron",
-      "category": "rf_system",
-      "function": "Provides RF power for acceleration",
+    "BEND": {
+      "full_name": "Bend (Large Dipole) Magnet",
+      "category": "beam_transport_magnets",
+      "function": "Bends beam trajectory",
+      "controllable": true,
       "typical_signals": {
-        "PDES": {"description": "Desired power", "units": "MW", "record_type": "ao"},
-        "PACT": {"description": "Actual power", "units": "MW", "record_type": "ai"},
-        "ADES": {"description": "Desired amplitude", "units": "MV", "record_type": "ao"},
-        "AACT": {"description": "Actual amplitude", "units": "MV", "record_type": "ai"},
-        "PDES": {"description": "Desired phase", "units": "deg", "record_type": "ao"},
-        "PACT": {"description": "Actual phase", "units": "deg", "record_type": "ai"}
+        "BDES": {"description": "Desired magnetic field", "units": "kG", "record_type": "ao"},
+        "BACT": {"description": "Actual magnetic field", "units": "kG", "record_type": "ai"},
+        "IDES": {"description": "Desired current", "units": "A", "record_type": "ao"},
+        "IACT": {"description": "Actual current", "units": "A", "record_type": "ai"}
       },
-      "naming_pattern": "KLYS:{AREA}:{DEVICE_NUM}:{SIGNAL}",
-      "physical_description": "High power microwave amplifier for RF acceleration"
+      "naming_pattern": "BEND:{AREA}:{POSITION}:{SIGNAL}",
+      "physical_description": "Large dipole magnet for beam trajectory control"
     },
-    "TORO": {
-      "full_name": "Toroidal Current Monitor",
-      "category": "beam_diagnostics", 
-      "function": "Measures beam current",
+    "BTRM": {
+      "full_name": "Bend Magnet Trim Windings",
+      "category": "beam_transport_magnets",
+      "function": "Fine adjustment of bend magnet field",
+      "controllable": true,
       "typical_signals": {
-        "TMIT": {"description": "Transmitted charge", "units": "pC", "record_type": "ai"},
-        "CHRG": {"description": "Bunch charge", "units": "pC", "record_type": "ai"}
+        "BDES": {"description": "Desired trim field", "units": "kG", "record_type": "ao"},
+        "BACT": {"description": "Actual trim field", "units": "kG", "record_type": "ai"},
+        "IDES": {"description": "Desired current", "units": "A", "record_type": "ao"},
+        "IACT": {"description": "Actual current", "units": "A", "record_type": "ai"}
       },
-      "naming_pattern": "TORO:{AREA}:{DEVICE_NUM}:{SIGNAL}",
-      "physical_description": "Toroidal transformer for non-invasive current measurement"
+      "naming_pattern": "BTRM:{AREA}:{POSITION}:{SIGNAL}",
+      "physical_description": "Trim windings for bend magnet fine adjustment"
     },
-    "UND": {
-      "full_name": "Undulator",
-      "category": "insertion_device",
-      "function": "Generates X-ray radiation",
+    "KICK": {
+      "full_name": "Kicker Magnet",
+      "category": "beam_transport_magnets",
+      "function": "Fast beam deflection",
+      "controllable": true,
+      "typical_signals": {
+        "BDES": {"description": "Desired kick field", "units": "kG-m", "record_type": "ao"},
+        "BACT": {"description": "Actual kick field", "units": "kG-m", "record_type": "ai"},
+        "VDES": {"description": "Desired voltage", "units": "kV", "record_type": "ao"},
+        "VACT": {"description": "Actual voltage", "units": "kV", "record_type": "ai"}
+      },
+      "naming_pattern": "KICK:{AREA}:{POSITION}:{SIGNAL}",
+      "physical_description": "Fast pulsed magnet for beam kicking"
+    },
+    "MGNT": {
+      "full_name": "General Magnet",
+      "category": "beam_transport_magnets",
+      "function": "General magnetic field control",
+      "controllable": false,
+      "typical_signals": {
+        "BACT": {"description": "Actual magnetic field", "units": "kG", "record_type": "ai"},
+        "IACT": {"description": "Actual current", "units": "A", "record_type": "ai"}
+      },
+      "naming_pattern": "MGNT:{AREA}:{POSITION}:{SIGNAL}",
+      "physical_description": "Generic magnetic device"
+    },
+    "QTRM": {
+      "full_name": "Quad Magnet Trim Windings",
+      "category": "beam_transport_magnets",
+      "function": "Fine adjustment of quadrupole field",
+      "controllable": true,
+      "typical_signals": {
+        "BDES": {"description": "Desired trim field", "units": "kG", "record_type": "ao"},
+        "BACT": {"description": "Actual trim field", "units": "kG", "record_type": "ai"},
+        "IDES": {"description": "Desired current", "units": "A", "record_type": "ao"},
+        "IACT": {"description": "Actual current", "units": "A", "record_type": "ai"}
+      },
+      "naming_pattern": "QTRM:{AREA}:{POSITION}:{SIGNAL}",
+      "physical_description": "Trim windings for quadrupole fine adjustment"
+    },
+    "SOLN": {
+      "full_name": "Solenoid Magnet",
+      "category": "beam_transport_magnets",
+      "function": "Provides axial magnetic focusing",
+      "controllable": true,
+      "typical_signals": {
+        "BDES": {"description": "Desired magnetic field", "units": "kG", "record_type": "ao"},
+        "BACT": {"description": "Actual magnetic field", "units": "kG", "record_type": "ai"},
+        "IDES": {"description": "Desired current", "units": "A", "record_type": "ao"},
+        "IACT": {"description": "Actual current", "units": "A", "record_type": "ai"}
+      },
+      "naming_pattern": "SOLN:{AREA}:{POSITION}:{SIGNAL}",
+      "physical_description": "Axially symmetric magnetic focusing element"
+    },
+    "USEG": {
+      "full_name": "Undulator Magnet Segment",
+      "category": "insertion_devices",
+      "function": "Individual undulator segment control",
+      "controllable": true,
       "typical_signals": {
         "KDES": {"description": "Desired K parameter", "units": "none", "record_type": "ao"},
         "KACT": {"description": "Actual K parameter", "units": "none", "record_type": "ai"},
         "GAPDES": {"description": "Desired gap", "units": "mm", "record_type": "ao"},
         "GAPACT": {"description": "Actual gap", "units": "mm", "record_type": "ai"}
       },
-      "naming_pattern": "UND:{AREA}:{DEVICE_NUM}:{SIGNAL}",
-      "physical_description": "Periodic magnetic structure for X-ray generation"
+      "naming_pattern": "USEG:{AREA}:{POSITION}:{SIGNAL}",
+      "physical_description": "Single segment of undulator magnetic structure"
     },
-    "RFBX": {
-      "full_name": "RF BPM Electronics",
-      "category": "beam_diagnostics",
-      "function": "RF-based beam position measurement",
-      "typical_signals": {
-        "X1H": {"description": "X position (high res)", "units": "um", "record_type": "ai"},
-        "Y1H": {"description": "Y position (high res)", "units": "um", "record_type": "ai"},
-        "S1H": {"description": "Sum signal (high res)", "units": "dBm", "record_type": "ai"}
-      },
-      "naming_pattern": "RFBX:{AREA}:{DEVICE_NUM}:{SIGNAL}",
-      "physical_description": "RF-based high-resolution beam position monitor"
-    },
-    "BEND": {
-      "full_name": "Bending Magnet",
-      "category": "beam_transport",
-      "function": "Bends beam trajectory",
+    "WIGG": {
+      "full_name": "Wiggler Magnet",
+      "category": "insertion_devices",
+      "function": "Generates broad spectrum radiation",
+      "controllable": true,
       "typical_signals": {
         "BDES": {"description": "Desired magnetic field", "units": "kG", "record_type": "ao"},
         "BACT": {"description": "Actual magnetic field", "units": "kG", "record_type": "ai"},
+        "GAPDES": {"description": "Desired gap", "units": "mm", "record_type": "ao"},
+        "GAPACT": {"description": "Actual gap", "units": "mm", "record_type": "ai"}
+      },
+      "naming_pattern": "WIGG:{AREA}:{POSITION}:{SIGNAL}",
+      "physical_description": "Wiggler magnetic structure for radiation generation"
+    },
+    "HVPS": {
+      "full_name": "High Voltage Power Supply",
+      "category": "power_supplies",
+      "function": "Provides high voltage power",
+      "controllable": true,
+      "typical_signals": {
+        "VDES": {"description": "Desired voltage", "units": "kV", "record_type": "ao"},
+        "VACT": {"description": "Actual voltage", "units": "kV", "record_type": "ai"},
+        "IDES": {"description": "Desired current", "units": "mA", "record_type": "ao"},
+        "IACT": {"description": "Actual current", "units": "mA", "record_type": "ai"}
+      },
+      "naming_pattern": "HVPS:{AREA}:{POSITION}:{SIGNAL}",
+      "physical_description": "High voltage power supply unit"
+    },
+    "LGPS": {
+      "full_name": "Large Power Supply",
+      "category": "power_supplies",
+      "function": "Provides high current power",
+      "controllable": true,
+      "typical_signals": {
+        "VDES": {"description": "Desired voltage", "units": "V", "record_type": "ao"},
+        "VACT": {"description": "Actual voltage", "units": "V", "record_type": "ai"},
         "IDES": {"description": "Desired current", "units": "A", "record_type": "ao"},
         "IACT": {"description": "Actual current", "units": "A", "record_type": "ai"}
       },
-      "naming_pattern": "BEND:{AREA}:{DEVICE_NUM}:{SIGNAL}",
-      "physical_description": "Dipole magnet for beam trajectory control"
+      "naming_pattern": "LGPS:{AREA}:{POSITION}:{SIGNAL}",
+      "physical_description": "Large capacity power supply"
     },
-    "PROF": {
-      "full_name": "Profile Monitor", 
-      "category": "beam_diagnostics",
-      "function": "Measures beam profile and size",
+    "SMPS": {
+      "full_name": "Small Power Supply",
+      "category": "power_supplies",
+      "function": "Provides low power",
+      "controllable": true,
       "typical_signals": {
-        "SIGMAX": {"description": "Horizontal beam size", "units": "um", "record_type": "ai"},
-        "SIGMAY": {"description": "Vertical beam size", "units": "um", "record_type": "ai"},
-        "XRMS": {"description": "X RMS beam size", "units": "um", "record_type": "ai"},
-        "YRMS": {"description": "Y RMS beam size", "units": "um", "record_type": "ai"}
-      },
-      "naming_pattern": "PROF:{AREA}:{DEVICE_NUM}:{SIGNAL}",
-      "physical_description": "Wire scanner or screen for beam profile measurement"
-    },
-    "COLL": {
-      "full_name": "Collimator",
-      "category": "beam_transport",
-      "function": "Removes beam halo and defines beam aperture",
-      "typical_signals": {
-        "XGAP": {"description": "Horizontal gap", "units": "mm", "record_type": "ao"},
-        "YGAP": {"description": "Vertical gap", "units": "mm", "record_type": "ao"},
-        "XIN": {"description": "X jaw in position", "units": "mm", "record_type": "ai"},
-        "XOUT": {"description": "X jaw out position", "units": "mm", "record_type": "ai"}
-      },
-      "naming_pattern": "COLL:{AREA}:{DEVICE_NUM}:{SIGNAL}",
-      "physical_description": "Adjustable aperture for beam collimation"
-    },
-    "SOLE": {
-      "full_name": "Solenoid",
-      "category": "beam_transport",
-      "function": "Provides axial magnetic focusing",
-      "typical_signals": {
-        "BDES": {"description": "Desired magnetic field", "units": "kG", "record_type": "ao"},
-        "BACT": {"description": "Actual magnetic field", "units": "kG", "record_type": "ai"},
+        "VDES": {"description": "Desired voltage", "units": "V", "record_type": "ao"},
+        "VACT": {"description": "Actual voltage", "units": "V", "record_type": "ai"},
         "IDES": {"description": "Desired current", "units": "A", "record_type": "ao"},
         "IACT": {"description": "Actual current", "units": "A", "record_type": "ai"}
       },
-      "naming_pattern": "SOLE:{AREA}:{DEVICE_NUM}:{SIGNAL}",
-      "physical_description": "Axially symmetric magnetic focusing element"
+      "naming_pattern": "SMPS:{AREA}:{POSITION}:{SIGNAL}",
+      "physical_description": "Small capacity power supply"
     },
-    "GUNB": {
-      "full_name": "Gun Buncher",
+    "PS": {
+      "full_name": "Generic Power Supply",
+      "category": "power_supplies",
+      "function": "General power supply",
+      "controllable": true,
+      "typical_signals": {
+        "VDES": {"description": "Desired voltage", "units": "V", "record_type": "ao"},
+        "VACT": {"description": "Actual voltage", "units": "V", "record_type": "ai"},
+        "IDES": {"description": "Desired current", "units": "A", "record_type": "ao"},
+        "IACT": {"description": "Actual current", "units": "A", "record_type": "ai"}
+      },
+      "naming_pattern": "PS:{AREA}:{POSITION}:{SIGNAL}",
+      "physical_description": "Generic power supply unit"
+    },
+    "ACCL": {
+      "full_name": "Accelerating Section",
       "category": "rf_system",
-      "function": "Pre-bunches electron beam from gun",
+      "function": "Accelerates beam with RF fields",
+      "controllable": true,
+      "typical_signals": {
+        "ADES": {"description": "Desired amplitude", "units": "MV", "record_type": "ao"},
+        "AACT": {"description": "Actual amplitude", "units": "MV", "record_type": "ai"},
+        "PDES": {"description": "Desired phase", "units": "deg", "record_type": "ao"},
+        "PACT": {"description": "Actual phase", "units": "deg", "record_type": "ai"},
+        "EACT": {"description": "Actual energy gain", "units": "MeV", "record_type": "ai"}
+      },
+      "naming_pattern": "ACCL:{AREA}:{POSITION}:{SIGNAL}",
+      "physical_description": "RF accelerating structure"
+    },
+    "KLYS": {
+      "full_name": "Klystron",
+      "category": "rf_system",
+      "function": "Provides RF power for acceleration",
+      "controllable": true,
+      "typical_signals": {
+        "PDES": {"description": "Desired power", "units": "MW", "record_type": "ao"},
+        "PACT": {"description": "Actual power", "units": "MW", "record_type": "ai"},
+        "ADES": {"description": "Desired amplitude", "units": "MV", "record_type": "ao"},
+        "AACT": {"description": "Actual amplitude", "units": "MV", "record_type": "ai"},
+        "PDES": {"description": "Desired phase", "units": "deg", "record_type": "ao"},
+        "PACT": {"description": "Actual phase", "units": "deg", "record_type": "ai"},
+        "VDES": {"description": "Desired beam voltage", "units": "kV", "record_type": "ao"},
+        "VACT": {"description": "Actual beam voltage", "units": "kV", "record_type": "ai"}
+      },
+      "naming_pattern": "KLYS:{AREA}:{POSITION}:{SIGNAL}",
+      "physical_description": "High power microwave amplifier for RF acceleration"
+    },
+    "LLRF": {
+      "full_name": "Low Level RF",
+      "category": "rf_system",
+      "function": "Controls RF amplitude and phase",
+      "controllable": true,
+      "typical_signals": {
+        "ADES": {"description": "Desired amplitude", "units": "V", "record_type": "ao"},
+        "AACT": {"description": "Actual amplitude", "units": "V", "record_type": "ai"},
+        "PDES": {"description": "Desired phase", "units": "deg", "record_type": "ao"},
+        "PACT": {"description": "Actual phase", "units": "deg", "record_type": "ai"}
+      },
+      "naming_pattern": "LLRF:{AREA}:{POSITION}:{SIGNAL}",
+      "physical_description": "Low level RF control system"
+    },
+    "PCAV": {
+      "full_name": "Beam Phasing Cavity",
+      "category": "rf_system",
+      "function": "Controls beam phase",
+      "controllable": true,
       "typical_signals": {
         "ADES": {"description": "Desired amplitude", "units": "MV", "record_type": "ao"},
         "AACT": {"description": "Actual amplitude", "units": "MV", "record_type": "ai"},
         "PDES": {"description": "Desired phase", "units": "deg", "record_type": "ao"},
         "PACT": {"description": "Actual phase", "units": "deg", "record_type": "ai"}
       },
-      "naming_pattern": "GUNB:{AREA}:{DEVICE_NUM}:{SIGNAL}",
-      "physical_description": "RF bunching cavity after electron gun"
+      "naming_pattern": "PCAV:{AREA}:{POSITION}:{SIGNAL}",
+      "physical_description": "RF cavity for beam phase control"
     },
-    "EV01": {
-      "full_name": "Event System",
-      "category": "timing_system",
-      "function": "Controls timing and event distribution",
+    "TCAV": {
+      "full_name": "Transverse Deflecting Cavity",
+      "category": "rf_system",
+      "function": "Deflects beam transversely",
+      "controllable": true,
       "typical_signals": {
-        "RG02_ACTRATE": {"description": "Rate generator 2 actual rate", "units": "Hz", "record_type": "mbbi"},
-        "CTRL_BEAMRATE": {"description": "Beam rate control", "units": "Hz", "record_type": "ao"}
+        "ADES": {"description": "Desired amplitude", "units": "MV", "record_type": "ao"},
+        "AACT": {"description": "Actual amplitude", "units": "MV", "record_type": "ai"},
+        "PDES": {"description": "Desired phase", "units": "deg", "record_type": "ao"},
+        "PACT": {"description": "Actual phase", "units": "deg", "record_type": "ai"}
       },
-      "naming_pattern": "IOC:{AREA}:EV01:{SIGNAL}",
-      "physical_description": "Event timing and synchronization system"
+      "naming_pattern": "TCAV:{AREA}:{POSITION}:{SIGNAL}",
+      "physical_description": "RF cavity for transverse beam deflection"
+    },
+    "REFS": {
+      "full_name": "Machine Parameters Set Points",
+      "category": "rf_system",
+      "function": "Reference setpoints for machine parameters",
+      "controllable": true,
+      "typical_signals": {
+        "EACT": {"description": "Reference energy", "units": "GeV", "record_type": "ai"},
+        "RDES": {"description": "Desired rate", "units": "Hz", "record_type": "ao"},
+        "RACT": {"description": "Actual rate", "units": "Hz", "record_type": "ai"}
+      },
+      "naming_pattern": "REFS:{AREA}:{POSITION}:{SIGNAL}",
+      "physical_description": "Machine reference parameter system"
+    },
+    "TORO": {
+      "full_name": "Toroidal Current Monitor",
+      "category": "beam_diagnostics",
+      "function": "Measures beam current",
+      "controllable": false,
+      "typical_signals": {
+        "TMIT": {"description": "Transmitted charge", "units": "pC", "record_type": "ai"},
+        "CHRG": {"description": "Bunch charge", "units": "pC", "record_type": "ai"}
+      },
+      "naming_pattern": "TORO:{AREA}:{POSITION}:{SIGNAL}",
+      "physical_description": "Toroidal transformer for non-invasive current measurement"
+    },
+    "APD": {
+      "full_name": "Avalanche Photo Diode",
+      "category": "beam_diagnostics",
+      "function": "Photo detection with amplification",
+      "controllable": false,
+      "typical_signals": {
+        "VACT": {"description": "Output voltage", "units": "V", "record_type": "ai"},
+        "IACT": {"description": "Output current", "units": "mA", "record_type": "ai"}
+      },
+      "naming_pattern": "APD:{AREA}:{POSITION}:{SIGNAL}",
+      "physical_description": "Avalanche photodiode detector"
+    },
+    "BLEN": {
+      "full_name": "Bunch Length Monitor",
+      "category": "beam_diagnostics",
+      "function": "Measures bunch length",
+      "controllable": false,
+      "typical_signals": {
+        "FWHM": {"description": "Full width half max", "units": "fs", "record_type": "ai"},
+        "RMS": {"description": "RMS bunch length", "units": "fs", "record_type": "ai"}
+      },
+      "naming_pattern": "BLEN:{AREA}:{POSITION}:{SIGNAL}",
+      "physical_description": "Bunch length measurement device"
+    },
+    "CAMR": {
+      "full_name": "Camera for Optics and Beam Profile",
+      "category": "beam_diagnostics",
+      "function": "Visual beam profile monitoring",
+      "controllable": true,
+      "typical_signals": {
+        "XRMS": {"description": "X beam size", "units": "um", "record_type": "ai"},
+        "YRMS": {"description": "Y beam size", "units": "um", "record_type": "ai"},
+        "XAVG": {"description": "X centroid", "units": "um", "record_type": "ai"},
+        "YAVG": {"description": "Y centroid", "units": "um", "record_type": "ai"}
+      },
+      "naming_pattern": "CAMR:{AREA}:{POSITION}:{SIGNAL}",
+      "physical_description": "Camera system for beam profile measurement"
+    },
+    "CRAD": {
+      "full_name": "Cerenkov Radiator",
+      "category": "beam_diagnostics",
+      "function": "Generates Cerenkov light for detection",
+      "controllable": false,
+      "typical_signals": {
+        "LACT": {"description": "Light intensity", "units": "counts", "record_type": "ai"}
+      },
+      "naming_pattern": "CRAD:{AREA}:{POSITION}:{SIGNAL}",
+      "physical_description": "Cerenkov radiation detector"
+    },
+    "FARC": {
+      "full_name": "Faraday Cup",
+      "category": "beam_diagnostics",
+      "function": "Measures beam current destructively",
+      "controllable": false,
+      "typical_signals": {
+        "CHRG": {"description": "Collected charge", "units": "pC", "record_type": "ai"},
+        "IACT": {"description": "Current", "units": "nA", "record_type": "ai"}
+      },
+      "naming_pattern": "FARC:{AREA}:{POSITION}:{SIGNAL}",
+      "physical_description": "Beam current measurement cup"
+    },
+    "FREQ": {
+      "full_name": "Frequency Counter",
+      "category": "beam_diagnostics",
+      "function": "Measures frequency",
+      "controllable": false,
+      "typical_signals": {
+        "FREQ": {"description": "Measured frequency", "units": "Hz", "record_type": "ai"}
+      },
+      "naming_pattern": "FREQ:{AREA}:{POSITION}:{SIGNAL}",
+      "physical_description": "Frequency measurement device"
+    },
+    "JMTR": {
+      "full_name": "Joule Meter (for Laser)",
+      "category": "beam_diagnostics",
+      "function": "Measures laser energy",
+      "controllable": false,
+      "typical_signals": {
+        "ENER": {"description": "Energy measurement", "units": "mJ", "record_type": "ai"}
+      },
+      "naming_pattern": "JMTR:{AREA}:{POSITION}:{SIGNAL}",
+      "physical_description": "Laser energy measurement device"
+    },
+    "OTRS": {
+      "full_name": "OTR Screen",
+      "category": "beam_diagnostics",
+      "function": "Optical transition radiation screen",
+      "controllable": true,
+      "typical_signals": {
+        "XRMS": {"description": "X beam size", "units": "um", "record_type": "ai"},
+        "YRMS": {"description": "Y beam size", "units": "um", "record_type": "ai"},
+        "XAVG": {"description": "X centroid", "units": "um", "record_type": "ai"},
+        "YAVG": {"description": "Y centroid", "units": "um", "record_type": "ai"},
+        "POSN": {"description": "Screen position", "units": "mm", "record_type": "ai"},
+        "POSNSETPT": {"description": "Screen position setpoint", "units": "mm", "record_type": "ao"}
+      },
+      "naming_pattern": "OTRS:{AREA}:{POSITION}:{SIGNAL}",
+      "physical_description": "Optical transition radiation screen for beam profile"
+    },
+    "PD": {
+      "full_name": "Photo Diode",
+      "category": "beam_diagnostics",
+      "function": "Photo detection",
+      "controllable": false,
+      "typical_signals": {
+        "VACT": {"description": "Output voltage", "units": "V", "record_type": "ai"},
+        "IACT": {"description": "Output current", "units": "mA", "record_type": "ai"}
+      },
+      "naming_pattern": "PD:{AREA}:{POSITION}:{SIGNAL}",
+      "physical_description": "Photodiode detector"
+    },
+    "PHOS": {
+      "full_name": "Phosphor Screen",
+      "category": "beam_diagnostics",
+      "function": "Beam profile visualization",
+      "controllable": true,
+      "typical_signals": {
+        "XRMS": {"description": "X beam size", "units": "um", "record_type": "ai"},
+        "YRMS": {"description": "Y beam size", "units": "um", "record_type": "ai"},
+        "POSN": {"description": "Screen position", "units": "mm", "record_type": "ai"},
+        "POSNSETPT": {"description": "Screen position setpoint", "units": "mm", "record_type": "ao"}
+      },
+      "naming_pattern": "PHOS:{AREA}:{POSITION}:{SIGNAL}",
+      "physical_description": "Phosphor screen for beam visualization"
+    },
+    "PMT": {
+      "full_name": "Photo Multiplier Tube",
+      "category": "beam_diagnostics",
+      "function": "High gain photo detection",
+      "controllable": false,
+      "typical_signals": {
+        "VACT": {"description": "Output voltage", "units": "V", "record_type": "ai"},
+        "GAIN": {"description": "PMT gain", "units": "none", "record_type": "ai"}
+      },
+      "naming_pattern": "PMT:{AREA}:{POSITION}:{SIGNAL}",
+      "physical_description": "Photomultiplier tube detector"
+    },
+    "YAGS": {
+      "full_name": "YAG Screen",
+      "category": "beam_diagnostics",
+      "function": "YAG crystal beam profile screen",
+      "controllable": true,
+      "typical_signals": {
+        "XRMS": {"description": "X beam size", "units": "um", "record_type": "ai"},
+        "YRMS": {"description": "Y beam size", "units": "um", "record_type": "ai"},
+        "POSN": {"description": "Screen position", "units": "mm", "record_type": "ai"},
+        "POSNSETPT": {"description": "Screen position setpoint", "units": "mm", "record_type": "ao"}
+      },
+      "naming_pattern": "YAGS:{AREA}:{POSITION}:{SIGNAL}",
+      "physical_description": "YAG crystal screen for beam profile"
+    },
+    "WPM": {
+      "full_name": "Wire Position Monitor",
+      "category": "beam_diagnostics",
+      "function": "Wire-based position measurement",
+      "controllable": false,
+      "typical_signals": {
+        "X": {"description": "Horizontal position", "units": "mm", "record_type": "ai"},
+        "Y": {"description": "Vertical position", "units": "mm", "record_type": "ai"}
+      },
+      "naming_pattern": "WPM:{AREA}:{POSITION}:{SIGNAL}",
+      "physical_description": "Wire-based beam position monitor"
+    },
+    "COLL": {
+      "full_name": "Collimator",
+      "category": "beam_transport_mechanical",
+      "function": "Removes beam halo and defines beam aperture",
+      "controllable": true,
+      "typical_signals": {
+        "XGAP": {"description": "Horizontal gap", "units": "mm", "record_type": "ao"},
+        "YGAP": {"description": "Vertical gap", "units": "mm", "record_type": "ao"},
+        "XIN": {"description": "X jaw in position", "units": "mm", "record_type": "ai"},
+        "XOUT": {"description": "X jaw out position", "units": "mm", "record_type": "ai"},
+        "YIN": {"description": "Y jaw in position", "units": "mm", "record_type": "ai"},
+        "YOUT": {"description": "Y jaw out position", "units": "mm", "record_type": "ai"}
+      },
+      "naming_pattern": "COLL:{AREA}:{POSITION}:{SIGNAL}",
+      "physical_description": "Adjustable aperture for beam collimation"
+    },
+    "SLIT": {
+      "full_name": "Slit (mechanical, 2- or 4-jaw)",
+      "category": "beam_transport_mechanical",
+      "function": "Beam aperture control",
+      "controllable": true,
+      "typical_signals": {
+        "XGAP": {"description": "Horizontal gap", "units": "mm", "record_type": "ao"},
+        "YGAP": {"description": "Vertical gap", "units": "mm", "record_type": "ao"},
+        "XCTR": {"description": "X center position", "units": "mm", "record_type": "ao"},
+        "YCTR": {"description": "Y center position", "units": "mm", "record_type": "ao"}
+      },
+      "naming_pattern": "SLIT:{AREA}:{POSITION}:{SIGNAL}",
+      "physical_description": "Mechanical slit for beam shaping"
+    },
+    "SHUT": {
+      "full_name": "Shutter (mechanical, optical shutter)",
+      "category": "beam_transport_mechanical",
+      "function": "Blocks or allows beam passage",
+      "controllable": true,
+      "typical_signals": {
+        "POSN": {"description": "Shutter position", "units": "none", "record_type": "bi"},
+        "CTRL": {"description": "Shutter control", "units": "none", "record_type": "bo"},
+        "OPEN": {"description": "Open status", "units": "none", "record_type": "bi"},
+        "CLOSE": {"description": "Close status", "units": "none", "record_type": "bi"}
+      },
+      "naming_pattern": "SHUT:{AREA}:{POSITION}:{SIGNAL}",
+      "physical_description": "Mechanical or optical beam shutter"
+    },
+    "DUMP": {
+      "full_name": "Beam Dump",
+      "category": "beam_transport_mechanical",
+      "function": "Safely absorbs beam energy",
+      "controllable": false,
+      "typical_signals": {
+        "TEMP": {"description": "Temperature", "units": "C", "record_type": "ai"},
+        "FLOW": {"description": "Cooling flow", "units": "gpm", "record_type": "ai"},
+        "PRESS": {"description": "Cooling pressure", "units": "psi", "record_type": "ai"}
+      },
+      "naming_pattern": "DUMP:{AREA}:{POSITION}:{SIGNAL}",
+      "physical_description": "Beam energy absorption device"
+    },
+    "STPR": {
+      "full_name": "Beam Stopper",
+      "category": "beam_transport_mechanical",
+      "function": "Stops beam",
+      "controllable": true,
+      "typical_signals": {
+        "POSN": {"description": "Stopper position", "units": "mm", "record_type": "ai"},
+        "POSNSETPT": {"description": "Position setpoint", "units": "mm", "record_type": "ao"},
+        "IN": {"description": "In beam status", "units": "none", "record_type": "bi"},
+        "OUT": {"description": "Out of beam status", "units": "none", "record_type": "bi"}
+      },
+      "naming_pattern": "STPR:{AREA}:{POSITION}:{SIGNAL}",
+      "physical_description": "Insertable beam stopper"
+    },
+    "UND": {
+      "full_name": "Undulator",
+      "category": "insertion_devices",
+      "function": "Generates X-ray radiation",
+      "controllable": true,
+      "typical_signals": {
+        "KDES": {"description": "Desired K parameter", "units": "none", "record_type": "ao"},
+        "KACT": {"description": "Actual K parameter", "units": "none", "record_type": "ai"},
+        "GAPDES": {"description": "Desired gap", "units": "mm", "record_type": "ao"},
+        "GAPACT": {"description": "Actual gap", "units": "mm", "record_type": "ai"},
+        "BACT": {"description": "Peak magnetic field", "units": "kG", "record_type": "ai"}
+      },
+      "naming_pattern": "UND:{AREA}:{POSITION}:{SIGNAL}",
+      "physical_description": "Periodic magnetic structure for X-ray generation"
+    },
+    "GATT": {
+      "full_name": "Gas Attenuator",
+      "category": "beam_attenuation",
+      "function": "Attenuates beam using gas",
+      "controllable": true,
+      "typical_signals": {
+        "PRESS": {"description": "Gas pressure", "units": "Torr", "record_type": "ao"},
+        "PRESSACT": {"description": "Actual pressure", "units": "Torr", "record_type": "ai"},
+        "TRANS": {"description": "Transmission", "units": "percent", "record_type": "ai"}
+      },
+      "naming_pattern": "GATT:{AREA}:{POSITION}:{SIGNAL}",
+      "physical_description": "Gas-filled beam attenuator"
+    },
+    "SATT": {
+      "full_name": "Solid Attenuator",
+      "category": "beam_attenuation",
+      "function": "Attenuates beam using solid materials",
+      "controllable": true,
+      "typical_signals": {
+        "THICK": {"description": "Thickness", "units": "um", "record_type": "ao"},
+        "THICKACT": {"description": "Actual thickness", "units": "um", "record_type": "ai"},
+        "TRANS": {"description": "Transmission", "units": "percent", "record_type": "ai"}
+      },
+      "naming_pattern": "SATT:{AREA}:{POSITION}:{SIGNAL}",
+      "physical_description": "Solid material beam attenuator"
+    },
+    "PKLS": {
+      "full_name": "Pockels Cell (photon attenuation)",
+      "category": "beam_attenuation",
+      "function": "Variable optical attenuation",
+      "controllable": true,
+      "typical_signals": {
+        "VDES": {"description": "Desired voltage", "units": "kV", "record_type": "ao"},
+        "VACT": {"description": "Actual voltage", "units": "kV", "record_type": "ai"},
+        "TRANS": {"description": "Transmission", "units": "percent", "record_type": "ai"}
+      },
+      "naming_pattern": "PKLS:{AREA}:{POSITION}:{SIGNAL}",
+      "physical_description": "Electro-optic beam attenuator"
+    },
+    "GUN": {
+      "full_name": "Gun",
+      "category": "electron_source",
+      "function": "Generates electron beam",
+      "controllable": true,
+      "typical_signals": {
+        "VDES": {"description": "Desired voltage", "units": "kV", "record_type": "ao"},
+        "VACT": {"description": "Actual voltage", "units": "kV", "record_type": "ai"},
+        "IACT": {"description": "Current", "units": "A", "record_type": "ai"},
+        "TEMP": {"description": "Cathode temperature", "units": "C", "record_type": "ai"}
+      },
+      "naming_pattern": "GUN:{AREA}:{POSITION}:{SIGNAL}",
+      "physical_description": "Electron gun source"
+    },
+    "CATH": {
+      "full_name": "Cathode",
+      "category": "electron_source",
+      "function": "Electron emission surface",
+      "controllable": false,
+      "typical_signals": {
+        "TEMP": {"description": "Cathode temperature", "units": "C", "record_type": "ai"},
+        "QE": {"description": "Quantum efficiency", "units": "percent", "record_type": "ai"}
+      },
+      "naming_pattern": "CATH:{AREA}:{POSITION}:{SIGNAL}",
+      "physical_description": "Electron emitting cathode"
+    },
+    "LHTR": {
+      "full_name": "Laser Heater",
+      "category": "electron_source",
+      "function": "Heats electron beam with laser",
+      "controllable": false,
+      "typical_signals": {
+        "POWER": {"description": "Laser power", "units": "W", "record_type": "ai"},
+        "TEMP": {"description": "Temperature rise", "units": "eV", "record_type": "ai"}
+      },
+      "naming_pattern": "LHTR:{AREA}:{POSITION}:{SIGNAL}",
+      "physical_description": "Laser-based beam heating system"
+    },
+    "IOC": {
+      "full_name": "EPICS IOC",
+      "category": "control_system",
+      "function": "Input/Output Controller for EPICS",
+      "controllable": true,
+      "typical_signals": {
+        "HEARTBEAT": {"description": "IOC heartbeat", "units": "Hz", "record_type": "ai"},
+        "UPTIME": {"description": "Uptime", "units": "s", "record_type": "ai"},
+        "LOAD": {"description": "CPU load", "units": "percent", "record_type": "ai"}
+      },
+      "naming_pattern": "IOC:{AREA}:{POSITION}:{SIGNAL}",
+      "physical_description": "EPICS Input/Output Controller"
+    },
+    "EIOC": {
+      "full_name": "Embedded Input/Output Controller",
+      "category": "control_system",
+      "function": "Embedded EPICS controller",
+      "controllable": true,
+      "typical_signals": {
+        "HEARTBEAT": {"description": "IOC heartbeat", "units": "Hz", "record_type": "ai"},
+        "TEMP": {"description": "Board temperature", "units": "C", "record_type": "ai"}
+      },
+      "naming_pattern": "EIOC:{AREA}:{POSITION}:{SIGNAL}",
+      "physical_description": "Embedded EPICS controller"
+    },
+    "MPS": {
+      "full_name": "MPS (Machine Protection System)",
+      "category": "safety_systems",
+      "function": "Protects machine from damage",
+      "controllable": false,
+      "typical_signals": {
+        "STAT": {"description": "System status", "units": "none", "record_type": "mbbi"},
+        "FLTSUM": {"description": "Fault summary", "units": "none", "record_type": "bi"}
+      },
+      "naming_pattern": "MPS:{AREA}:{POSITION}:{SIGNAL}",
+      "physical_description": "Machine protection monitoring system"
+    },
+    "PPS": {
+      "full_name": "PPS (Personnel Protection System)",
+      "category": "safety_systems",
+      "function": "Protects personnel from radiation",
+      "controllable": false,
+      "typical_signals": {
+        "STAT": {"description": "System status", "units": "none", "record_type": "mbbi"},
+        "PERMIT": {"description": "Beam permit", "units": "none", "record_type": "bi"}
+      },
+      "naming_pattern": "PPS:{AREA}:{POSITION}:{SIGNAL}",
+      "physical_description": "Personnel protection monitoring system"
+    },
+    "BCS": {
+      "full_name": "Beam Containment System",
+      "category": "safety_systems",
+      "function": "Ensures beam containment",
+      "controllable": false,
+      "typical_signals": {
+        "STAT": {"description": "System status", "units": "none", "record_type": "mbbi"},
+        "LOSSMASK": {"description": "Loss mask", "units": "none", "record_type": "bi"}
+      },
+      "naming_pattern": "BCS:{AREA}:{POSITION}:{SIGNAL}",
+      "physical_description": "Beam containment monitoring system"
+    },
+    "LENS": {
+      "full_name": "Lens Magnet",
+      "category": "beam_transport_magnets",
+      "function": "Magnetic lens for beam focusing",
+      "controllable": true,
+      "typical_signals": {
+        "BDES": {"description": "Desired magnetic field", "units": "kG", "record_type": "ao"},
+        "BACT": {"description": "Actual magnetic field", "units": "kG", "record_type": "ai"},
+        "IDES": {"description": "Desired current", "units": "A", "record_type": "ao"},
+        "IACT": {"description": "Actual current", "units": "A", "record_type": "ai"}
+      },
+      "naming_pattern": "LENS:{AREA}:{POSITION}:{SIGNAL}",
+      "physical_description": "Magnetic lens element"
+    },
+    "SEPT": {
+      "full_name": "Septum Magnet",
+      "category": "beam_transport_magnets",
+      "function": "Beam separation magnet",
+      "controllable": true,
+      "typical_signals": {
+        "BDES": {"description": "Desired magnetic field", "units": "kG", "record_type": "ao"},
+        "BACT": {"description": "Actual magnetic field", "units": "kG", "record_type": "ai"},
+        "IDES": {"description": "Desired current", "units": "A", "record_type": "ao"},
+        "IACT": {"description": "Actual current", "units": "A", "record_type": "ai"}
+      },
+      "naming_pattern": "SEPT:{AREA}:{POSITION}:{SIGNAL}",
+      "physical_description": "Septum magnet for beam separation"
+    },
+    "SBD": {
+      "full_name": "Single Beam Dump",
+      "category": "beam_transport_mechanical",
+      "function": "Single-use beam dump",
+      "controllable": false,
+      "typical_signals": {
+        "TEMP": {"description": "Temperature", "units": "C", "record_type": "ai"},
+        "STAT": {"description": "Status", "units": "none", "record_type": "mbbi"}
+      },
+      "naming_pattern": "SBD:{AREA}:{POSITION}:{SIGNAL}",
+      "physical_description": "Single beam dump device"
+    },
+    "DOOR": {
+      "full_name": "PPS Door",
+      "category": "safety_systems",
+      "function": "Personnel protection door",
+      "controllable": false,
+      "typical_signals": {
+        "STAT": {"description": "Door status", "units": "none", "record_type": "mbbi"},
+        "OPEN": {"description": "Open status", "units": "none", "record_type": "bi"},
+        "CLOSE": {"description": "Close status", "units": "none", "record_type": "bi"}
+      },
+      "naming_pattern": "DOOR:{AREA}:{POSITION}:{SIGNAL}",
+      "physical_description": "Personnel protection system door"
+    },
+    "GASA": {
+      "full_name": "Gas Attenuator",
+      "category": "beam_attenuation",
+      "function": "Gas-based beam attenuation (legacy name)",
+      "controllable": true,
+      "typical_signals": {
+        "PRESS": {"description": "Gas pressure", "units": "Torr", "record_type": "ao"},
+        "PRESSACT": {"description": "Actual pressure", "units": "Torr", "record_type": "ai"},
+        "TRANS": {"description": "Transmission", "units": "percent", "record_type": "ai"}
+      },
+      "naming_pattern": "GASA:{AREA}:{POSITION}:{SIGNAL}",
+      "physical_description": "Gas attenuator (legacy naming)"
+    },
+    "WIRE": {
+      "full_name": "Moving Wire Scanner",
+      "category": "beam_diagnostics",
+      "function": "Wire-based beam profile measurement",
+      "controllable": true,
+      "typical_signals": {
+        "XRMS": {"description": "X beam size", "units": "um", "record_type": "ai"},
+        "YRMS": {"description": "Y beam size", "units": "um", "record_type": "ai"},
+        "POSN": {"description": "Wire position", "units": "mm", "record_type": "ai"},
+        "POSNSETPT": {"description": "Position setpoint", "units": "mm", "record_type": "ao"}
+      },
+      "naming_pattern": "WIRE:{AREA}:{POSITION}:{SIGNAL}",
+      "physical_description": "Moving wire scanner for beam profile"
+    },
+    "PMTS": {
+      "full_name": "Photo Multiplier Tube Beam Loss Monitor Signal",
+      "category": "beam_diagnostics",
+      "function": "PMT-based beam loss monitoring",
+      "controllable": false,
+      "typical_signals": {
+        "LOSS": {"description": "Loss signal", "units": "Hz", "record_type": "ai"},
+        "VACT": {"description": "PMT voltage", "units": "V", "record_type": "ai"}
+      },
+      "naming_pattern": "PMTS:{AREA}:{POSITION}:{SIGNAL}",
+      "physical_description": "PMT beam loss monitor signal"
+    },
+    "PICS": {
+      "full_name": "Protection Ion Chamber Signal",
+      "category": "safety_systems",
+      "function": "Ion chamber protection signal",
+      "controllable": false,
+      "typical_signals": {
+        "LOSS": {"description": "Loss signal", "units": "Hz", "record_type": "ai"},
+        "DOSE": {"description": "Radiation dose", "units": "rad", "record_type": "ai"}
+      },
+      "naming_pattern": "PICS:{AREA}:{POSITION}:{SIGNAL}",
+      "physical_description": "Protection ion chamber signal"
+    },
+    "PROF": {
+      "full_name": "Profile Monitor (combined YAGS/OTRS/PHOS)",
+      "category": "beam_diagnostics",
+      "function": "Combined profile monitor device",
+      "controllable": true,
+      "typical_signals": {
+        "XRMS": {"description": "X beam size", "units": "um", "record_type": "ai"},
+        "YRMS": {"description": "Y beam size", "units": "um", "record_type": "ai"},
+        "XAVG": {"description": "X centroid", "units": "um", "record_type": "ai"},
+        "YAVG": {"description": "Y centroid", "units": "um", "record_type": "ai"}
+      },
+      "naming_pattern": "PROF:{AREA}:{POSITION}:{SIGNAL}",
+      "physical_description": "SLC dummy device for combined profile monitors"
+    },
+    "PLIC": {
+      "full_name": "Panofsky Long Ion Chamber",
+      "category": "beam_diagnostics",
+      "function": "Long ion chamber for loss measurement",
+      "controllable": false,
+      "typical_signals": {
+        "LOSS": {"description": "Loss rate", "units": "Hz", "record_type": "ai"}
+      },
+      "naming_pattern": "PLIC:{AREA}:{POSITION}:{SIGNAL}",
+      "physical_description": "Panofsky long ion chamber"
+    },
+    "DT": {
+      "full_name": "Diagnostic Tank",
+      "category": "beam_diagnostics",
+      "function": "Diagnostic measurement tank",
+      "controllable": true,
+      "typical_signals": {
+        "VACT": {"description": "Voltage readback", "units": "V", "record_type": "ai"},
+        "PRESS": {"description": "Pressure", "units": "Torr", "record_type": "ai"}
+      },
+      "naming_pattern": "DT:{AREA}:{POSITION}:{SIGNAL}",
+      "physical_description": "Diagnostic tank"
+    },
+    "SBST": {
+      "full_name": "Sub-Booster",
+      "category": "rf_system",
+      "function": "RF sub-booster amplifier",
+      "controllable": true,
+      "typical_signals": {
+        "PDES": {"description": "Desired power", "units": "kW", "record_type": "ao"},
+        "PACT": {"description": "Actual power", "units": "kW", "record_type": "ai"},
+        "ADES": {"description": "Desired amplitude", "units": "V", "record_type": "ao"},
+        "AACT": {"description": "Actual amplitude", "units": "V", "record_type": "ai"}
+      },
+      "naming_pattern": "SBST:{AREA}:{POSITION}:{SIGNAL}",
+      "physical_description": "RF sub-booster amplifier"
+    },
+    "VGKL": {
+      "full_name": "Vacuum Gauge associated with a Klystron",
+      "category": "vacuum_system",
+      "function": "Vacuum measurement near klystron",
+      "controllable": false,
+      "typical_signals": {
+        "PRESS": {"description": "Pressure", "units": "Torr", "record_type": "ai"},
+        "STAT": {"description": "Gauge status", "units": "none", "record_type": "mbbi"}
+      },
+      "naming_pattern": "VGKL:{AREA}:{POSITION}:{SIGNAL}",
+      "physical_description": "Klystron-associated vacuum gauge"
+    },
+    "VGPR": {
+      "full_name": "Vacuum Pirani Gauge",
+      "category": "vacuum_system",
+      "function": "Pirani vacuum measurement",
+      "controllable": false,
+      "typical_signals": {
+        "PRESS": {"description": "Pressure", "units": "Torr", "record_type": "ai"},
+        "STAT": {"description": "Gauge status", "units": "none", "record_type": "mbbi"}
+      },
+      "naming_pattern": "VGPR:{AREA}:{POSITION}:{SIGNAL}",
+      "physical_description": "Pirani vacuum gauge"
+    },
+    "VGCC": {
+      "full_name": "Vacuum Cold Cathode Gauge",
+      "category": "vacuum_system",
+      "function": "Cold cathode vacuum measurement",
+      "controllable": true,
+      "typical_signals": {
+        "PRESS": {"description": "Pressure", "units": "Torr", "record_type": "ai"},
+        "STAT": {"description": "Gauge status", "units": "none", "record_type": "mbbi"},
+        "CTRL": {"description": "Control", "units": "none", "record_type": "bo"}
+      },
+      "naming_pattern": "VGCC:{AREA}:{POSITION}:{SIGNAL}",
+      "physical_description": "Cold cathode vacuum gauge"
+    },
+    "VGTC": {
+      "full_name": "Vacuum ThermoCouple Gauge",
+      "category": "vacuum_system",
+      "function": "Thermocouple vacuum measurement",
+      "controllable": false,
+      "typical_signals": {
+        "PRESS": {"description": "Pressure", "units": "Torr", "record_type": "ai"},
+        "TEMP": {"description": "Temperature", "units": "C", "record_type": "ai"}
+      },
+      "naming_pattern": "VGTC:{AREA}:{POSITION}:{SIGNAL}",
+      "physical_description": "Thermocouple vacuum gauge"
+    },
+    "VGCP": {
+      "full_name": "Vacuum Convection-enhanced Pirani Gauge",
+      "category": "vacuum_system",
+      "function": "Enhanced pirani vacuum measurement",
+      "controllable": false,
+      "typical_signals": {
+        "PRESS": {"description": "Pressure", "units": "Torr", "record_type": "ai"},
+        "STAT": {"description": "Gauge status", "units": "none", "record_type": "mbbi"}
+      },
+      "naming_pattern": "VGCP:{AREA}:{POSITION}:{SIGNAL}",
+      "physical_description": "Convection-enhanced pirani gauge"
+    },
+    "VGHF": {
+      "full_name": "Vacuum Hot Filament Gauge",
+      "category": "vacuum_system",
+      "function": "Hot filament vacuum measurement",
+      "controllable": true,
+      "typical_signals": {
+        "PRESS": {"description": "Pressure", "units": "Torr", "record_type": "ai"},
+        "STAT": {"description": "Gauge status", "units": "none", "record_type": "mbbi"},
+        "CTRL": {"description": "Control", "units": "none", "record_type": "bo"}
+      },
+      "naming_pattern": "VGHF:{AREA}:{POSITION}:{SIGNAL}",
+      "physical_description": "Hot filament vacuum gauge"
+    },
+    "VVKL": {
+      "full_name": "Vacuum Valve associated with a Klystron",
+      "category": "vacuum_system",
+      "function": "Klystron vacuum valve",
+      "controllable": true,
+      "typical_signals": {
+        "STAT": {"description": "Valve status", "units": "none", "record_type": "mbbi"},
+        "CTRL": {"description": "Control", "units": "none", "record_type": "bo"},
+        "OPEN": {"description": "Open status", "units": "none", "record_type": "bi"},
+        "CLOSE": {"description": "Close status", "units": "none", "record_type": "bi"}
+      },
+      "naming_pattern": "VVKL:{AREA}:{POSITION}:{SIGNAL}",
+      "physical_description": "Klystron-associated vacuum valve"
+    },
+    "VVPG": {
+      "full_name": "Vacuum Pneumatic Gate Valve",
+      "category": "vacuum_system",
+      "function": "Pneumatic gate valve",
+      "controllable": true,
+      "typical_signals": {
+        "STATE": {"description": "Valve state", "units": "none", "record_type": "mbbi"},
+        "CTRL": {"description": "Control", "units": "none", "record_type": "bo"},
+        "OPEN": {"description": "Open status", "units": "none", "record_type": "bi"},
+        "CLOSE": {"description": "Close status", "units": "none", "record_type": "bi"}
+      },
+      "naming_pattern": "VVPG:{AREA}:{POSITION}:{SIGNAL}",
+      "physical_description": "Pneumatic gate valve"
+    },
+    "VVMG": {
+      "full_name": "Vacuum Manual Gate Valve",
+      "category": "vacuum_system",
+      "function": "Manual gate valve",
+      "controllable": false,
+      "typical_signals": {
+        "STATE": {"description": "Valve state", "units": "none", "record_type": "mbbi"}
+      },
+      "naming_pattern": "VVMG:{AREA}:{POSITION}:{SIGNAL}",
+      "physical_description": "Manual gate valve"
+    },
+    "VVFS": {
+      "full_name": "Vacuum Fast Valve",
+      "category": "vacuum_system",
+      "function": "Fast-acting vacuum valve",
+      "controllable": true,
+      "typical_signals": {
+        "STATE": {"description": "Valve state", "units": "none", "record_type": "mbbi"},
+        "CTRL": {"description": "Control", "units": "none", "record_type": "bo"}
+      },
+      "naming_pattern": "VVFS:{AREA}:{POSITION}:{SIGNAL}",
+      "physical_description": "Fast vacuum valve"
+    },
+    "VPKL": {
+      "full_name": "Vacuum Pump associated with a Klystron",
+      "category": "vacuum_system",
+      "function": "Klystron vacuum pump",
+      "controllable": true,
+      "typical_signals": {
+        "STAT": {"description": "Pump status", "units": "none", "record_type": "mbbi"},
+        "CTRL": {"description": "Control", "units": "none", "record_type": "bo"},
+        "SPEED": {"description": "Pump speed", "units": "rpm", "record_type": "ai"}
+      },
+      "naming_pattern": "VPKL:{AREA}:{POSITION}:{SIGNAL}",
+      "physical_description": "Klystron-associated vacuum pump"
+    },
+    "VPCR": {
+      "full_name": "Cryo Pump",
+      "category": "vacuum_system",
+      "function": "Cryogenic vacuum pump",
+      "controllable": true,
+      "typical_signals": {
+        "STAT": {"description": "Pump status", "units": "none", "record_type": "mbbi"},
+        "TEMP": {"description": "Temperature", "units": "K", "record_type": "ai"},
+        "CTRL": {"description": "Control", "units": "none", "record_type": "bo"}
+      },
+      "naming_pattern": "VPCR:{AREA}:{POSITION}:{SIGNAL}",
+      "physical_description": "Cryogenic vacuum pump"
+    },
+    "VPIO": {
+      "full_name": "Ion Pump",
+      "category": "vacuum_system",
+      "function": "Ion vacuum pump",
+      "controllable": true,
+      "typical_signals": {
+        "STAT": {"description": "Pump status", "units": "none", "record_type": "mbbi"},
+        "IACT": {"description": "Ion current", "units": "mA", "record_type": "ai"},
+        "VACT": {"description": "Voltage", "units": "kV", "record_type": "ai"},
+        "CTRL": {"description": "Control", "units": "none", "record_type": "bo"}
+      },
+      "naming_pattern": "VPIO:{AREA}:{POSITION}:{SIGNAL}",
+      "physical_description": "Ion pump"
+    },
+    "VPTM": {
+      "full_name": "TurboMolecular Pump",
+      "category": "vacuum_system",
+      "function": "Turbomolecular vacuum pump",
+      "controllable": true,
+      "typical_signals": {
+        "STAT": {"description": "Pump status", "units": "none", "record_type": "mbbi"},
+        "SPEED": {"description": "Pump speed", "units": "rpm", "record_type": "ai"},
+        "CTRL": {"description": "Control", "units": "none", "record_type": "bo"}
+      },
+      "naming_pattern": "VPTM:{AREA}:{POSITION}:{SIGNAL}",
+      "physical_description": "Turbomolecular pump"
+    },
+    "VPTS": {
+      "full_name": "Ti Sublimation Pump",
+      "category": "vacuum_system",
+      "function": "Titanium sublimation pump",
+      "controllable": true,
+      "typical_signals": {
+        "STAT": {"description": "Pump status", "units": "none", "record_type": "mbbi"},
+        "CTRL": {"description": "Control", "units": "none", "record_type": "bo"}
+      },
+      "naming_pattern": "VPTS:{AREA}:{POSITION}:{SIGNAL}",
+      "physical_description": "Titanium sublimation pump"
+    },
+    "VPFO": {
+      "full_name": "Fore Pump",
+      "category": "vacuum_system",
+      "function": "Fore line vacuum pump",
+      "controllable": true,
+      "typical_signals": {
+        "STAT": {"description": "Pump status", "units": "none", "record_type": "mbbi"},
+        "PRESS": {"description": "Fore pressure", "units": "Torr", "record_type": "ai"},
+        "CTRL": {"description": "Control", "units": "none", "record_type": "bo"}
+      },
+      "naming_pattern": "VPFO:{AREA}:{POSITION}:{SIGNAL}",
+      "physical_description": "Fore pump"
+    },
+    "VPRO": {
+      "full_name": "Roughing Pump",
+      "category": "vacuum_system",
+      "function": "Roughing vacuum pump",
+      "controllable": true,
+      "typical_signals": {
+        "STAT": {"description": "Pump status", "units": "none", "record_type": "mbbi"},
+        "PRESS": {"description": "Pressure", "units": "Torr", "record_type": "ai"},
+        "CTRL": {"description": "Control", "units": "none", "record_type": "bo"}
+      },
+      "naming_pattern": "VPRO:{AREA}:{POSITION}:{SIGNAL}",
+      "physical_description": "Roughing pump"
+    },
+    "GADC": {
+      "full_name": "Gated ADC Module (not BPMP)",
+      "category": "control_hardware",
+      "function": "Gated analog-to-digital converter",
+      "controllable": true,
+      "typical_signals": {
+        "STAT": {"description": "Module status", "units": "none", "record_type": "mbbi"},
+        "CTRL": {"description": "Control", "units": "none", "record_type": "bo"}
+      },
+      "naming_pattern": "GADC:{AREA}:{POSITION}:{SIGNAL}",
+      "physical_description": "Gated ADC module"
+    },
+    "BPMP": {
+      "full_name": "Beam Position Module",
+      "category": "control_hardware",
+      "function": "Beam position measurement module",
+      "controllable": false,
+      "typical_signals": {
+        "STAT": {"description": "Module status", "units": "none", "record_type": "mbbi"},
+        "X": {"description": "X position", "units": "mm", "record_type": "ai"},
+        "Y": {"description": "Y position", "units": "mm", "record_type": "ai"}
+      },
+      "naming_pattern": "BPMP:{AREA}:{POSITION}:{SIGNAL}",
+      "physical_description": "Beam position measurement module"
+    },
+    "CRAT": {
+      "full_name": "VME Crate",
+      "category": "control_hardware",
+      "function": "VME equipment crate",
+      "controllable": true,
+      "typical_signals": {
+        "STAT": {"description": "Crate status", "units": "none", "record_type": "mbbi"},
+        "TEMP": {"description": "Temperature", "units": "C", "record_type": "ai"},
+        "POWER": {"description": "Power status", "units": "none", "record_type": "bi"}
+      },
+      "naming_pattern": "CRAT:{AREA}:{POSITION}:{SIGNAL}",
+      "physical_description": "VME equipment crate"
+    },
+    "EVG": {
+      "full_name": "Event Generator",
+      "category": "control_hardware",
+      "function": "Timing event generation",
+      "controllable": true,
+      "typical_signals": {
+        "STAT": {"description": "Generator status", "units": "none", "record_type": "mbbi"},
+        "FREQ": {"description": "Output frequency", "units": "Hz", "record_type": "ai"},
+        "CTRL": {"description": "Control", "units": "none", "record_type": "bo"}
+      },
+      "naming_pattern": "EVG:{AREA}:{POSITION}:{SIGNAL}",
+      "physical_description": "Event generator for timing"
+    },
+    "EVR": {
+      "full_name": "Event Receiver",
+      "category": "control_hardware",
+      "function": "Timing event reception",
+      "controllable": true,
+      "typical_signals": {
+        "STAT": {"description": "Receiver status", "units": "none", "record_type": "mbbi"},
+        "CNT": {"description": "Event count", "units": "none", "record_type": "ai"}
+      },
+      "naming_pattern": "EVR:{AREA}:{POSITION}:{SIGNAL}",
+      "physical_description": "Event receiver for timing"
+    },
+    "MPG": {
+      "full_name": "Master Pattern Generator",
+      "category": "control_hardware",
+      "function": "Master timing pattern generation",
+      "controllable": true,
+      "typical_signals": {
+        "STAT": {"description": "Generator status", "units": "none", "record_type": "mbbi"},
+        "PULSEID": {"description": "Pulse ID", "units": "none", "record_type": "ai"}
+      },
+      "naming_pattern": "MPG:{AREA}:{POSITION}:{SIGNAL}",
+      "physical_description": "Master pattern generator"
+    },
+    "FAN": {
+      "full_name": "Fan",
+      "category": "utilities",
+      "function": "Cooling fan",
+      "controllable": true,
+      "typical_signals": {
+        "SPEED": {"description": "Fan speed", "units": "rpm", "record_type": "ai"},
+        "CTRL": {"description": "Control", "units": "none", "record_type": "bo"}
+      },
+      "naming_pattern": "FAN:{AREA}:{POSITION}:{SIGNAL}",
+      "physical_description": "Cooling fan system"
+    },
+    "LCW": {
+      "full_name": "Low Conductivity Water",
+      "category": "utilities",
+      "function": "Cooling water system",
+      "controllable": false,
+      "typical_signals": {
+        "FLOW": {"description": "Flow rate", "units": "gpm", "record_type": "ai"},
+        "TEMP": {"description": "Temperature", "units": "C", "record_type": "ai"},
+        "PRESS": {"description": "Pressure", "units": "psi", "record_type": "ai"}
+      },
+      "naming_pattern": "LCW:{AREA}:{POSITION}:{SIGNAL}",
+      "physical_description": "Low conductivity water system"
+    },
+    "AIR": {
+      "full_name": "Compressed Air System",
+      "category": "utilities",
+      "function": "Pneumatic air supply",
+      "controllable": false,
+      "typical_signals": {
+        "PRESS": {"description": "Air pressure", "units": "psi", "record_type": "ai"},
+        "FLOW": {"description": "Flow rate", "units": "scfm", "record_type": "ai"}
+      },
+      "naming_pattern": "AIR:{AREA}:{POSITION}:{SIGNAL}",
+      "physical_description": "Compressed air system"
+    },
+    "HVAC": {
+      "full_name": "Heating, Ventilation, and AC System",
+      "category": "utilities",
+      "function": "Environmental control",
+      "controllable": false,
+      "typical_signals": {
+        "TEMP": {"description": "Temperature", "units": "C", "record_type": "ai"},
+        "FLOW": {"description": "Air flow", "units": "cfm", "record_type": "ai"}
+      },
+      "naming_pattern": "HVAC:{AREA}:{POSITION}:{SIGNAL}",
+      "physical_description": "HVAC environmental system"
     }
   },
   "device_categories": {
     "beam_diagnostics": {
       "description": "Devices that measure beam properties",
-      "devices": ["BPMS", "TORO", "RFBX", "PROF"],
+      "devices": ["BPMS", "TORO", "APD", "BLEN", "CAMR", "CRAD", "FARC", "FREQ", "JMTR", "OTRS", "PD", "PHOS", "PMT", "YAGS", "WPM", "WIRE", "PMTS", "PROF", "PLIC", "DT"],
       "color_code": "#4CAF50"
     },
-    "beam_transport": {
-      "description": "Devices that guide and shape the beam",
-      "devices": ["QUAD", "XCOR", "YCOR", "BEND", "COLL", "SOLE"],
+    "beam_transport_magnets": {
+      "description": "Magnetic devices that guide and shape the beam",
+      "devices": ["QUAD", "XCOR", "YCOR", "BEND", "BTRM", "KICK", "MGNT", "QTRM", "SOLN", "LENS", "SEPT"],
       "color_code": "#2196F3"
+    },
+    "beam_transport_mechanical": {
+      "description": "Mechanical devices for beam transport and control",
+      "devices": ["COLL", "SLIT", "SHUT", "DUMP", "STPR", "SBD"],
+      "color_code": "#03A9F4"
+    },
+    "insertion_devices": {
+      "description": "Devices that generate X-ray radiation",
+      "devices": ["UND", "USEG", "WIGG"],
+      "color_code": "#9C27B0"
     },
     "rf_system": {
       "description": "RF acceleration and bunching systems",
-      "devices": ["KLYS", "GUNB"],
+      "devices": ["ACCL", "KLYS", "LLRF", "PCAV", "TCAV", "REFS", "SBST"],
       "color_code": "#FF9800"
     },
-    "insertion_device": {
-      "description": "Devices that generate X-ray radiation",
-      "devices": ["UND"],
-      "color_code": "#9C27B0"
+    "power_supplies": {
+      "description": "Power supply systems",
+      "devices": ["HVPS", "LGPS", "SMPS", "PS"],
+      "color_code": "#FF5722"
     },
-    "timing_system": {
-      "description": "Timing and synchronization systems",
-      "devices": ["EV01"],
+    "beam_attenuation": {
+      "description": "Devices that control beam intensity",
+      "devices": ["GATT", "SATT", "PKLS", "GASA"],
+      "color_code": "#795548"
+    },
+    "electron_source": {
+      "description": "Electron beam generation systems",
+      "devices": ["GUN", "CATH", "LHTR"],
+      "color_code": "#E91E63"
+    },
+    "control_system": {
+      "description": "Control system infrastructure",
+      "devices": ["IOC", "EIOC"],
+      "color_code": "#607D8B"
+    },
+    "control_hardware": {
+      "description": "Control system hardware modules",
+      "devices": ["GADC", "BPMP", "CRAT", "EVG", "EVR", "MPG"],
+      "color_code": "#455A64"
+    },
+    "vacuum_system": {
+      "description": "Vacuum system components",
+      "devices": ["VGKL", "VGPR", "VGCC", "VGTC", "VGCP", "VGHF", "VVKL", "VVPG", "VVMG", "VVFS", "VPKL", "VPCR", "VPIO", "VPTM", "VPTS", "VPFO", "VPRO"],
+      "color_code": "#8BC34A"
+    },
+    "safety_systems": {
+      "description": "Safety and protection systems",
+      "devices": ["MPS", "PPS", "BCS", "DOOR", "PICS"],
       "color_code": "#F44336"
+    },
+    "utilities": {
+      "description": "Utility and infrastructure systems",
+      "devices": ["FAN", "LCW", "AIR", "HVAC"],
+      "color_code": "#9E9E9E"
     }
   },
   "signal_types": {
     "position": {
-      "signals": ["X", "Y", "X1H", "Y1H"],
+      "signals": ["X", "Y", "XAVG", "YAVG", "XRMS", "YRMS", "POSN", "XCTR", "YCTR"],
       "typical_units": ["mm", "um"],
-      "description": "Beam position measurements"
+      "description": "Position measurements and setpoints"
     },
-    "current": {
+    "current_beam": {
       "signals": ["TMIT", "TMITBR", "CHRG"],
       "typical_units": ["pC", "nC"],
       "description": "Beam current and charge measurements"
+    },
+    "current_electrical": {
+      "signals": ["IDES", "IACT"],
+      "typical_units": ["A", "mA"],
+      "description": "Electrical current in devices"
+    },
+    "voltage": {
+      "signals": ["VDES", "VACT", "VSETPT", "VOLTSETPT"],
+      "typical_units": ["V", "kV"],
+      "description": "Voltage settings and measurements"
     },
     "magnetic_field": {
       "signals": ["BDES", "BACT", "BCON"],
       "typical_units": ["kG", "kG-m"],
       "description": "Magnetic field settings and readbacks"
     },
-    "current_electrical": {
-      "signals": ["IDES", "IACT"],
-      "typical_units": ["A"],
-      "description": "Electrical current in magnets"
-    },
     "rf_amplitude": {
-      "signals": ["ADES", "AACT"],
+      "signals": ["ADES", "AACT", "AMPL", "AMPLSETPT"],
       "typical_units": ["MV", "V"],
       "description": "RF amplitude settings and measurements"
     },
     "rf_phase": {
-      "signals": ["PDES", "PACT"],
+      "signals": ["PDES", "PACT", "PHASE", "PHASESETPT"],
       "typical_units": ["deg"],
       "description": "RF phase settings and measurements"
     },
     "rf_power": {
-      "signals": ["PDES", "PACT"],
-      "typical_units": ["MW", "kW"],
+      "signals": ["PDES", "PACT", "POWER", "POWERSETPT"],
+      "typical_units": ["MW", "kW", "W"],
       "description": "RF power settings and measurements"
     },
     "mechanical": {
-      "signals": ["GAPDES", "GAPACT", "XGAP", "YGAP"],
-      "typical_units": ["mm"],
-      "description": "Mechanical position settings"
+      "signals": ["GAPDES", "GAPACT", "XGAP", "YGAP", "THICK", "THICKACT"],
+      "typical_units": ["mm", "um"],
+      "description": "Mechanical position and dimension settings"
     },
     "beam_size": {
-      "signals": ["SIGMAX", "SIGMAY", "XRMS", "YRMS"],
-      "typical_units": ["um", "mm"],
-      "description": "Beam size measurements"
+      "signals": ["XRMS", "YRMS", "FWHM", "RMS"],
+      "typical_units": ["um", "mm", "fs"],
+      "description": "Beam size and profile measurements"
     },
-    "control": {
-      "signals": ["KDES", "KACT"],
+    "control_parameters": {
+      "signals": ["KDES", "KACT", "TRANS", "QE"],
+      "typical_units": ["none", "percent"],
+      "description": "Control and derived parameters"
+    },
+    "environmental": {
+      "signals": ["TEMP", "PRESS", "FLOW", "TEMPSETPT", "PRESSSETPT", "FLOWSETPT"],
+      "typical_units": ["C", "Torr", "psi", "gpm"],
+      "description": "Environmental monitoring"
+    },
+    "timing": {
+      "signals": ["DELAY", "DELAYSETPT", "TDES", "TABS", "TIME", "TOD"],
+      "typical_units": ["ns", "us", "s"],
+      "description": "Timing and synchronization"
+    },
+    "energy": {
+      "signals": ["ENERGY", "ENERGYSETPT", "EACT", "ENER"],
+      "typical_units": ["GeV", "MeV", "eV", "mJ"],
+      "description": "Energy measurements and setpoints"
+    },
+    "frequency": {
+      "signals": ["FREQ", "FREQSETPT", "RATE", "RDES", "RACT"],
+      "typical_units": ["Hz", "MHz", "GHz"],
+      "description": "Frequency and rate measurements"
+    },
+    "status_control": {
+      "signals": ["STAT", "CTRL", "GO", "RESET", "RESTART", "STOP", "CHECK"],
       "typical_units": ["none"],
-      "description": "Control parameters"
+      "description": "Status monitoring and control actions"
+    },
+    "binary_status": {
+      "signals": ["OPEN", "CLOSE", "IN", "OUT", "PERMIT", "FLTSUM"],
+      "typical_units": ["none"],
+      "description": "Binary status indicators"
     }
   },
-  "area_device_mapping": {
-    "GUN": ["GUNB", "SOLE", "EV01"],
-    "L0": ["KLYS", "BPMS", "TORO"],
-    "L1": ["KLYS", "BPMS", "TORO", "XCOR", "YCOR"],
-    "L2": ["KLYS", "BPMS", "TORO", "XCOR", "YCOR", "QUAD"],
-    "L3": ["KLYS", "BPMS", "TORO", "XCOR", "YCOR", "QUAD"],
-    "BC1": ["BPMS", "BEND", "XCOR", "YCOR"],
-    "BC2": ["BPMS", "BEND", "XCOR", "YCOR"],
-    "LTUH": ["BPMS", "QUAD", "XCOR", "YCOR"],
-    "UNDH": ["UND", "BPMS", "RFBX", "XCOR", "YCOR"],
-    "DMPH_1": ["BPMS", "TORO", "PROF"],
-    "DMPH_2": ["BPMS", "TORO"]
+  "ioc_naming": {
+    "format": "<ioctype>-<area>-<system><##>",
+    "description": "IOC naming follows separate convention from device naming",
+    "examples": ["ioc-in20-pm01", "sioc-in20-mgnt00", "eioc-li21-bpm02"],
+    "ioc_types": {
+      "ioc": {
+        "description": "Hard IOCs (VME-based)",
+        "example": "ioc-in20-pm01"
+      },
+      "eioc": {
+        "description": "Embedded IOCs",
+        "example": "eioc-li21-bpm02"
+      },
+      "sioc": {
+        "description": "Soft IOCs (Linux-based)",
+        "example": "sioc-in20-mgnt00"
+      },
+      "vioc": {
+        "description": "Soft IOCs (LinuxRT) - deprecated, use sioc",
+        "example": "vioc-li21-fbck01"
+      }
+    },
+    "subsystem_prefixes": {
+      "CD": {"description": "Controls Department (development only)", "alarm_ioc": null, "network_prefix": null},
+      "LS": {"description": "Laser Steering", "alarm_ioc": "sioc-<area>-lasr00", "network_prefix": "lasr"},
+      "PM": {"description": "Profile Monitor", "alarm_ioc": "sioc-<area>-prof00", "network_prefix": "prof"},
+      "ID": {"description": "Insertion Device", "alarm_ioc": null, "network_prefix": "id"},
+      "IM": {"description": "Toroid", "alarm_ioc": "sioc-<area>-gadc00", "network_prefix": "toro"},
+      "BL": {"description": "Bunch Length Monitor", "alarm_ioc": null, "network_prefix": "blen"},
+      "BP": {"description": "Beam Position Monitor", "alarm_ioc": "sioc-<area>-gadc00", "network_prefix": "bpm"},
+      "MC": {"description": "Motion Control", "alarm_ioc": "mc", "network_prefix": "mc"},
+      "CV": {"description": "CAMAC", "alarm_ioc": "sioc-<area>-rf00", "network_prefix": "camac"},
+      "AM": {"description": "Alignment Mirror", "alarm_ioc": null, "network_prefix": "align"},
+      "MG": {"description": "Magnet", "alarm_ioc": "sioc-<area>-mgnt00", "network_prefix": "mgnt"},
+      "EV": {"description": "Event (Timing) System", "alarm_ioc": "sioc-<area>-evnt00", "network_prefix": "evnt"},
+      "RF": {"description": "Low-Level RF Master", "alarm_ioc": "sioc-<area>-rf00", "network_prefix": null},
+      "RP": {"description": "Low-Level RF PLL", "alarm_ioc": "sioc-<area>-rf00", "network_prefix": null},
+      "RC": {"description": "Low-Level RF PAC", "alarm_ioc": "sioc-<area>-rf00", "network_prefix": null},
+      "RD": {"description": "Low-Level RF PAD", "alarm_ioc": "sioc-<area>-rf00", "network_prefix": null},
+      "KY": {"description": "High Power RF (Klystron/Modulator)", "alarm_ioc": "sioc-<area>-rf00", "network_prefix": "klys"},
+      "MP": {"description": "Machine Protection System", "alarm_ioc": "sioc-<area>-mps00", "network_prefix": "mps"},
+      "ML": {"description": "Matlab IOC with Generic PVs", "alarm_ioc": null, "network_prefix": null},
+      "NW": {"description": "Network Device", "alarm_ioc": "sioc-<area>-ntwk00", "network_prefix": "ntwk"},
+      "PP": {"description": "Personnel Protection System", "alarm_ioc": "sioc-<area>-pps00", "network_prefix": "pps"},
+      "BC": {"description": "Beam Containment System", "alarm_ioc": "sioc-<area>-bcs00", "network_prefix": "bcs"},
+      "SP": {"description": "Shared Platform", "alarm_ioc": null, "network_prefix": "sp"},
+      "TM": {"description": "Temperature Monitor", "alarm_ioc": "sioc-<area>-temp", "network_prefix": "temp"},
+      "TR": {"description": "Fast Feedback Controller", "alarm_ioc": "sioc-<area>-fbck00", "network_prefix": null},
+      "VA": {"description": "Vacuum", "alarm_ioc": "sioc-<area>-vac00", "network_prefix": "vac"},
+      "WA": {"description": "Water/HVAC/Air/Collimator", "alarm_ioc": "sioc-<area>-util00", "network_prefix": "watr,hvac,air,coll"},
+      "WS": {"description": "Wire Scanner", "alarm_ioc": "sioc-<area>-ws00", "network_prefix": "ws"},
+      "FB": {"description": "Feedback", "alarm_ioc": "sioc-<area>-fbck00", "network_prefix": "fbck"},
+      "AD": {"description": "Alignment Diagnostic System", "alarm_ioc": null, "network_prefix": "align"},
+      "EX": {"description": "Experimental Support", "alarm_ioc": null, "network_prefix": null},
+      "UC": {"description": "Undulator Motion Control", "alarm_ioc": null, "network_prefix": null},
+      "DU": {"description": "Delta Undulator", "alarm_ioc": null, "network_prefix": null}
+    }
+  },
+  "standard_attributes": {
+    "analog_readbacks": {
+      "VACT": {"description": "Voltage readback", "units": "V", "type": "ai", "aliases": ["V"]},
+      "IACT": {"description": "Current readback", "units": "A", "type": "ai", "aliases": ["I"]},
+      "BACT": {"description": "Magnetic field readback", "units": "kG", "type": "ai", "aliases": ["B"]},
+      "AACT": {"description": "Amplitude readback", "units": "V", "type": "ai", "aliases": ["A", "AMPL"]},
+      "PACT": {"description": "Phase readback", "units": "deg", "type": "ai", "aliases": ["P", "PHASE"]},
+      "TEMP": {"description": "Temperature readback", "units": "C", "type": "ai"},
+      "FLOW": {"description": "Flow rate", "units": "gpm", "type": "ai"},
+      "SPEED": {"description": "Speed readback", "units": "rpm", "type": "ai"},
+      "PRESS": {"description": "Pressure readback", "units": "psi", "type": "ai", "aliases": ["VACM"]},
+      "POSN": {"description": "Position", "units": "mm", "type": "ai"},
+      "GAP": {"description": "Gap", "units": "mm", "type": "ai"},
+      "ENER": {"description": "Energy", "units": "GeV", "type": "ai"},
+      "PWR": {"description": "Power", "units": "W", "type": "ai", "aliases": ["POWER"]},
+      "FREQ": {"description": "Frequency", "units": "Hz", "type": "ai"},
+      "ANGL": {"description": "Angle", "units": "deg", "type": "ai", "aliases": ["ANGLE"]},
+      "TMIT": {"description": "Bunch charge", "units": "pC", "type": "ai"},
+      "CHRG": {"description": "Charge", "units": "pC", "type": "ai"},
+      "LOSS": {"description": "Loss rate", "units": "Hz", "type": "ai"}
+    },
+    "analog_setpoints": {
+      "VDES": {"description": "Voltage setpoint", "units": "V", "type": "ao"},
+      "IDES": {"description": "Current setpoint", "units": "A", "type": "ao"},
+      "BDES": {"description": "Magnetic field setpoint", "units": "kG", "type": "ao"},
+      "ADES": {"description": "Amplitude setpoint", "units": "V", "type": "ao"},
+      "PDES": {"description": "Phase setpoint", "units": "deg", "type": "ao"},
+      "POSNSETPT": {"description": "Position setpoint", "units": "mm", "type": "ao"},
+      "GAPSETPT": {"description": "Gap setpoint", "units": "mm", "type": "ao"},
+      "ENERGYSETPT": {"description": "Energy setpoint", "units": "GeV", "type": "ao"},
+      "POWERSETPT": {"description": "Power setpoint", "units": "W", "type": "ao"},
+      "FREQSETPT": {"description": "Frequency setpoint", "units": "Hz", "type": "ao"},
+      "ANGLESETPT": {"description": "Angle setpoint", "units": "deg", "type": "ao"},
+      "TEMPSETPT": {"description": "Temperature setpoint", "units": "C", "type": "ao"},
+      "FLOWSETPT": {"description": "Flow setpoint", "units": "gpm", "type": "ao"},
+      "PRESSSETPT": {"description": "Pressure setpoint", "units": "psi", "type": "ao"}
+    },
+    "positional": {
+      "X": {"description": "Horizontal position", "units": "mm", "type": "ai"},
+      "Y": {"description": "Vertical position", "units": "mm", "type": "ai"},
+      "Z": {"description": "Longitudinal position", "units": "mm", "type": "ai"},
+      "S": {"description": "Beamline position", "units": "m", "type": "ai"},
+      "ROLL": {"description": "Roll angle", "units": "deg", "type": "ai"},
+      "PITCH": {"description": "Pitch angle", "units": "deg", "type": "ai"},
+      "YAW": {"description": "Yaw angle", "units": "deg", "type": "ai"}
+    },
+    "statistical": {
+      "XAVG": {"description": "X average", "units": "mm", "type": "ai"},
+      "YAVG": {"description": "Y average", "units": "mm", "type": "ai"},
+      "ZAVG": {"description": "Z average", "units": "mm", "type": "ai"},
+      "XRMS": {"description": "X RMS", "units": "mm", "type": "ai"},
+      "YRMS": {"description": "Y RMS", "units": "mm", "type": "ai"},
+      "ZRMS": {"description": "Z RMS", "units": "mm", "type": "ai"},
+      "XMAX": {"description": "X maximum", "units": "mm", "type": "ai", "aliases": ["XHI"]},
+      "YMAX": {"description": "Y maximum", "units": "mm", "type": "ai", "aliases": ["YHI"]},
+      "ZMAX": {"description": "Z maximum", "units": "mm", "type": "ai", "aliases": ["ZHI"]},
+      "XMIN": {"description": "X minimum", "units": "mm", "type": "ai", "aliases": ["XLO"]},
+      "YMIN": {"description": "Y minimum", "units": "mm", "type": "ai", "aliases": ["YLO"]},
+      "ZMIN": {"description": "Z minimum", "units": "mm", "type": "ai", "aliases": ["ZLO"]}
+    },
+    "timing": {
+      "DELAY": {"description": "Pulse delay", "units": "ns", "type": "ai"},
+      "DELAYSETPT": {"description": "Delay setpoint", "units": "ns", "type": "ao"},
+      "TDES": {"description": "Time setpoint", "units": "ns", "type": "ao"},
+      "TIME": {"description": "Delta time", "units": "ns", "type": "ai"},
+      "TIMESETPT": {"description": "Time setpoint", "units": "ns", "type": "ao"},
+      "TOD": {"description": "Time of day", "units": "s", "type": "stringin"},
+      "WIDTH": {"description": "Pulse width", "units": "ns", "type": "ai"},
+      "WIDTHSETPT": {"description": "Width setpoint", "units": "ns", "type": "ao"},
+      "PULSEID": {"description": "Synchronized beam pulse ID", "units": "none", "type": "ai"},
+      "MODIFIER": {"description": "Timing pattern modifier", "units": "none", "type": "ai"},
+      "INCLUSION": {"description": "Timing inclusion mask", "units": "none", "type": "ai"},
+      "EXCLUSION": {"description": "Timing exclusion mask", "units": "none", "type": "ai"}
+    },
+    "control_actions": {
+      "CTRL": {"description": "Control/command", "units": "none", "type": "bo"},
+      "GO": {"description": "Go action", "units": "none", "type": "bo"},
+      "STOP": {"description": "Stop action", "units": "none", "type": "bo"},
+      "RESET": {"description": "Reset action", "units": "none", "type": "bo"},
+      "RESTART": {"description": "Restart action", "units": "none", "type": "bo"},
+      "CHECK": {"description": "Check action", "units": "none", "type": "bo"}
+    },
+    "status_indicators": {
+      "STAT": {"description": "Status bit mask (SLC)", "units": "none", "type": "mbbi"},
+      "STATUS": {"description": "Status (inputs)", "units": "none", "type": "mbbi"},
+      "STATE": {"description": "State (inputs)", "units": "none", "type": "mbbi"},
+      "MODE": {"description": "Mode", "units": "none", "type": "mbbi"},
+      "OPEN": {"description": "Open status", "units": "none", "type": "bi"},
+      "CLOSE": {"description": "Close status", "units": "none", "type": "bi"},
+      "IN": {"description": "In beam status", "units": "none", "type": "bi"},
+      "OUT": {"description": "Out of beam status", "units": "none", "type": "bi"}
+    },
+    "ioc_diagnostics": {
+      "MEM": {"description": "Memory in-use", "units": "MB", "type": "ai"},
+      "CPU": {"description": "CPU in-use", "units": "percent", "type": "ai"},
+      "CACONNCNT": {"description": "CA connection count", "units": "none", "type": "ai"},
+      "CACHANCNT": {"description": "CA channel count", "units": "none", "type": "ai"},
+      "FDCNT": {"description": "File descriptor count", "units": "none", "type": "ai"},
+      "MBUFCNT": {"description": "Memory buffer count", "units": "none", "type": "ai"},
+      "GOTIME": {"description": "Time since boot", "units": "s", "type": "ai"},
+      "RESTARTTOD": {"description": "Restart timestamp", "units": "s", "type": "stringin"},
+      "HEARTBEAT": {"description": "IOC heartbeat", "units": "Hz", "type": "ai"},
+      "UPTIME": {"description": "Uptime", "units": "s", "type": "ai"}
+    },
+    "xtod_specific": {
+      "DEGAS": {"description": "Degas on/off state", "units": "none", "type": "bi"},
+      "EMISSION": {"description": "Emission high/low state", "units": "none", "type": "bi"},
+      "AUTOVENT": {"description": "Auto-vent state", "units": "none", "type": "bi"},
+      "STARTMODE": {"description": "Start mode", "units": "none", "type": "mbbi"}
+    },
+    "identifiers": {
+      "ID": {"description": "Unique integer identifier", "units": "none", "type": "ai"},
+      "NAME": {"description": "Name string", "units": "none", "type": "stringin"},
+      "USERNAME": {"description": "User ID", "units": "none", "type": "stringin"},
+      "CNT": {"description": "Count", "units": "none", "type": "ai", "aliases": ["COUNT"]},
+      "CNTSETPT": {"description": "Count setpoint", "units": "none", "type": "ao", "aliases": ["COUNTSETPT"]}
+    }
+  },
+  "naming_constraints": {
+    "device_names": {
+      "total_length_max": 28,
+      "device_type_length": {"min": 3, "max": 9},
+      "area_length": 4,
+      "position_length": {"min": 3, "max": 4},
+      "attribute_length_max": 12,
+      "case_requirements": {
+        "device_type": "UPPER",
+        "area": "UPPER", 
+        "position": "UPPER",
+        "attribute": "UPPER_or_UpperCamelCase"
+      },
+      "separator": ":",
+      "format": "DeviceType:Area:Position:Attribute"
+    },
+    "ioc_names": {
+      "format": "<ioctype>-<area>-<system><##>",
+      "ioctype_length": {"min": 3, "max": 4},
+      "area_length": 4,
+      "system_length": 2,
+      "number_length": 2,
+      "case_requirements": "lowercase",
+      "separator": "-"
+    }
+  },
+  "validation_rules": {
+    "unique_names_required": true,
+    "scp_compatibility": "case_insensitive_required_for_scp_access",
+    "mixed_case_restriction": "attribute_field_only",
+    "no_case_only_differences": true,
+    "ioc_sequential_numbering": "numbers_assigned_sequentially_per_area_system"
   }
 }

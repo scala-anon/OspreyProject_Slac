@@ -11,7 +11,8 @@
     "dictionaries_path": "config/dictionaries/",
     "coordinate_validation": true,
     "beam_path_detection": true,
-    "area_sequence_mapping": true
+    "area_sequence_mapping": true,
+    "create_query_indexes": true
   },
   "ingestion_settings": {
     "default_batch_size": 10,
@@ -40,7 +41,7 @@
   "logging": {
     "level": "INFO",
     "enable_performance_metrics": true,
-    "log_spatial_enrichment": false,
+    "log_spatial_enrichment": true,
     "log_batch_operations": true
   }
 }

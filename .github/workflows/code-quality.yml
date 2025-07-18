@@ -1,0 +1,54 @@
+# .github/workflows/code-quality.yml
+name: Code Quality
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  format-check:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Install clang-format
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y clang-format-12
+
+    - name: Check code formatting
+      run: |
+        find src include apps -name "*.cpp" -o -name "*.hpp" -o -name "*.h" | \
+          xargs clang-format-12 --dry-run --Werror
+
+  documentation:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Install Doxygen
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y doxygen graphviz
+
+    - name: Generate documentation
+      run: |
+        if [ -f Doxyfile ]; then
+          doxygen Doxyfile
+        else
+          echo "No Doxyfile found, skipping documentation generation"
+        fi
+
+    - name: Upload documentation
+      uses: actions/upload-artifact@v4
+      if: success()
+      with:
+        name: documentation
+        path: docs/html/
+        retention-days: 30

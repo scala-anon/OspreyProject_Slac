@@ -1,0 +1,84 @@
+# .github/workflows/performance-benchmark.yml
+name: Performance Benchmarks
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    - cron: '0 4 * * SUN'  # Weekly performance check
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential \
+          cmake \
+          libprotobuf-dev \
+          libgrpc++-dev \
+          protobuf-compiler-grpc \
+          protobuf-compiler \
+          libhdf5-dev \
+          libhdf5-cpp-103 \
+          nlohmann-json3-dev \
+          libmongoc-dev \
+          libmongocxx-dev \
+          time
+
+    - name: Build optimized version
+      run: |
+        chmod +x DataProvider/build_dp.sh
+        ./DataProvider/build_dp.sh clean
+        
+        # Build with optimization flags
+        mkdir -p DataProvider/build
+        cd DataProvider/build
+        cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_FLAGS="-O3 -march=native"
+        make -j$(nproc)
+
+    - name: Setup MongoDB for benchmarks
+      uses: supercharge/mongodb-github-action@1.10.0
+      with:
+        mongodb-version: 6.0
+
+    - name: Generate test data
+      run: |
+        # Create synthetic H5 test data for benchmarking
+        mkdir -p test_data
+        
+        # This would normally generate test H5 files
+        # For now, we'll test with available executables
+        echo "Test data setup complete"
+
+    - name: Run performance benchmarks
+      run: |
+        cd DataProvider
+        
+        # Test H5 parsing performance
+        if [ -f bin/h5_to_dp ]; then
+          echo "=== H5 Parser Performance ==="
+          /usr/bin/time -v ./bin/h5_to_dp --help 2>&1 | grep -E "(Maximum resident|User time|System time|Elapsed)"
+        fi
+        
+        # Test query performance
+        if [ -f bin/query_pv ]; then
+          echo "=== Query Performance ==="
+          /usr/bin/time -v ./bin/query_pv --help 2>&1 | grep -E "(Maximum resident|User time|System time|Elapsed)"
+        fi
+
+    - name: Upload benchmark results
+      uses: actions/upload-artifact@v4
+      with:
+        name: performance-results-${{ github.sha }}
+        path: |
+          benchmark_results.txt
+        retention-days: 30

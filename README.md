@@ -1,293 +1,219 @@
 # OspreyProject_Slac
 
 ## Description
-This project provides a high-performance C++ backend integration system for the Osprey Machine Learning Data Platform(MLDP), specifically designed to bridge the gap between scientific data acquisition systems and modern data analytics workflows. 
+This project provides a high-performance C++ data processing pipeline specifically designed for SLAC accelerator data cleaning and ingestion into the Osprey Machine Learning Data Platform (MLDP). The system transforms raw H5 files from accelerator operations into structured, spatially-enriched MongoDB documents optimized for analysis and machine learning workflows.
 
 ## Motivation
-Scientific facilities, particularly accelerator laboratories like SLAC, generate massive volumes of time-series data from process variables(PVs) that are traditionally stored in HDF5 files or custom binary formats. However, this often remains siloed and difficult to access for machine learning applications, real-time monitoring, and collaborative analysis. The existing data pipelines lacked efficient mechanisms to ingest, correlate, and query this data at scale. 
+SLAC generates massive volumes of accelerator data stored in H5 files that require systematic processing before analysis. This raw data often contains significant amounts of invalid values (NaN), lacks spatial context about device locations, and exists in formats that are difficult to query efficiently. The existing workflow required manual data cleaning and lacked automated spatial enrichment capabilities.
 
 ## Why did we build this project?
-We built this system to solve critical data accessibility challenges in scientific computing environments:
-  1. **Data Ingestion Bottleneck:** Legacy systems struggle to efficiently process and ingest larges volumes of multi-channel scientific data into modern data Platform
-  2. **Format Compatibility:** Scientific data comes in various formats (HDF5, custom binary packets, streaming data) that need unified handling
-  3. **Real-time Requirements:** Experimental facilities need both historical data analysis and real-time data streaming capabilities.
-  4. **Scalability:** Traditional tools can't handle the volume and velocity of modern accelerator data systems.
-  5. **Lab Reusability:** Each scientific facility was reinventing similar data ingestion solutions. 
+We built this system to solve critical data processing challenges specific to SLAC's accelerator operations:
+
+1. **Data Quality Issues:** Raw accelerator data contains high percentages of NaN values (often 95%+) that need statistical analysis and quality assessment
+2. **Spatial Context Loss:** Device names like `KLYS_LI20_61_AMPL` contain spatial information that wasn't being systematically extracted and enriched
+3. **Query Inefficiency:** H5 files are not queryable; researchers needed a way to efficiently search and analyze data by device location, type, and time ranges
+4. **Statistical Processing:** Large datasets required automated statistical analysis to identify operational periods and data quality metrics
+5. **Workflow Automation:** Manual data cleaning processes needed to be automated for consistent, repeatable results
 
 ## What problem does it solve?
 The **OspreyProject MLDP Backend** addresses these challenges by providing:
 
-  - **Unified Data Ingestion:** Supports multiple input formats (HDF5 files, binary packet streams, real-time data feeds) with a single, consistent interface
-  - **High-Performance Processing:** Optimized C++ implementation with memory-efficient algorithms that can handle millions of data points with minimal latency
-  - **Streaming Architecture:** Built on gRPC for efficient client-server communication with support for unary, client-streaming, server-streaming, and bidirectional streaming patterns
-  - **Data Correlation Engine:** Advanced algorithms to correlate time-series data across multiple process variables, enabling cross-system analysis
-  - **Platform Integration:** Seamless integration with the Osprey MLDP for annotation, querying, and machine learning workflows
-  - **Lab-Ready Deployment:** Modular design allows easy deployment across different scientific facilities with minimal configuration
+- **Automated Data Cleaning:** Processes raw H5 files and calculates comprehensive statistics including NaN percentages, valid data counts, and quality metrics
+- **Spatial Enrichment:** Automatically extracts and enriches device location information, beamline associations, and device classifications from PV names
+- **Structured Storage:** Converts H5 files into MongoDB documents with consistent schema and spatial metadata
+- **Efficient Querying:** Enables fast queries by device type, location, time range, and data quality criteria
+- **Statistical Analysis:** Provides immediate statistical summaries of large datasets without requiring full data retrieval
+- **Accelerator-Aware Processing:** Understands accelerator-specific data patterns, device types, and operational characteristics
 
-The system transforms isolated scientific data into an accessible, queryable, and ML-ready format, enabling researchers to focus on analysis rather than data wrangling. It bridges the gap between legacy scientific data acquisition systems and modern cloud-native data platforms, making years of experimental data immediately available for advanced analytics and machine learning applications.
- 
+The system transforms isolated H5 files into an accessible, queryable database that enables accelerator physicists and data scientists to quickly identify relevant data, assess data quality, and focus analysis efforts on meaningful operational periods.
+
+## MongoDB Bucket Format
+
+Data is stored in MongoDB using a structured bucket format optimized for accelerator data:
+
+### Bucket Document Structure
+```javascript
+{
+  _id: "KLYS_LI20_61_AMPL-1752695016-338222271",           // Unique identifier
+  
+  // Core Data
+  pvName: "KLYS_LI20_61_AMPL",                             // Process Variable name
+  dataColumn: {                                            // Time-series data (binary)
+    name: "KLYS_LI20_61_AMPL",
+    bytes: Binary(...),                                    // Compressed data values
+    valueType: "DOUBLEVALUE"
+  },
+  dataTimestamps: {                                        // Temporal information
+    firstTime: ISODate("2025-07-16T19:43:36.338Z"),
+    lastTime: ISODate("2025-07-16T20:46:00.760Z"),
+    sampleCount: 453456,
+    samplePeriod: 8257539                                  // nanoseconds
+  },
+  
+  // Device Information
+  attributes: {
+    // Basic device parsing
+    device: "KLYS",                                        // Device type
+    device_area: "LI20",                                   // Beamline area  
+    device_location: "61",                                 // Position number
+    device_attribute: "AMPL",                              // Signal type
+    
+    // Spatial enrichment (automatically added)
+    spatial_area: "LI20",                                  // Normalized area
+    spatial_category: "rf_system",                         // Device category
+    spatial_controllable: "true",                          // Control capability
+    spatial_device_type: "KLYS",                           // Normalized type
+    spatial_function: "Provides RF power for acceleration", // Description
+    spatial_position: "61",                                // Position in beamline
+    spatial_signal_type: "rf_amplitude",                   // Signal classification
+    spatial_z_position: "0.000000",                        // Longitudinal position
+    spatial_z_uncertainty: "1.000000",                     // Position uncertainty
+    
+    // Data provenance
+    origin: "CU",                                          // Beam path origin
+    project: "default",                                    // Data collection project
+    units: "MV/m"                                          // Engineering units
+  },
+  
+  // Searchable tags
+  tags: [
+    "h5_data",                                             // Data source type
+    "device_KLYS",                                         // Device-based tag
+    "project_default",                                     // Project tag
+    "spatial_enriched",                                    // Processing status
+    "spatial_rf_system",                                   // Category tag
+    "spatial_rf_amplitude",                                // Signal type tag
+    "spatial_li20",                                        // Area tag
+    "spatial_controllable"                                 // Capability tag
+  ],
+  
+  // Metadata
+  providerId: "687a7a734b72a5133bc395ac",                  // Data provider ID
+  createdAt: ISODate("2025-07-18T16:53:33.969Z")          // Ingestion timestamp
+}
+```
+
+### Key Features of the Bucket Format:
+- **Binary Data Storage:** Raw time-series data stored efficiently as compressed binary
+- **Spatial Metadata:** Comprehensive location and device classification information
+- **Temporal Indexing:** Optimized for time-range queries
+- **Tag-Based Search:** Multiple tag dimensions for flexible querying
+- **Data Provenance:** Complete traceability from source H5 files
+- **Statistical Ready:** Structure supports statistical analysis without data retrieval
+
+## Tools
+
+### h5_to_dp
+**Data Ingestion and Processing Tool**
+- Processes H5 files from SLAC accelerator data collection
+- Performs spatial enrichment by parsing device names and adding location metadata
+- Calculates data quality statistics including NaN counts and valid data percentages
+- Ingests processed data into MongoDB with structured bucket format
+- Supports batch processing of multiple H5 files with configurable options
+- Provides progress monitoring and error handling for large datasets
+
+### query_pv
+**Data Query and Analysis Tool**
+- Queries MongoDB for specific process variables by name, pattern matching, or multiple PV lists
+- Supports human-readable date ranges (MM-DD-YYYY format) instead of Unix timestamps
+- Calculates comprehensive statistics (mean, median, std dev, min, max, NaN counts) for large datasets
+- Handles streaming queries for datasets with millions of data points
+- Provides flexible output options including statistics-only mode and raw data value display
+- Enables regex pattern matching for device discovery (e.g., all BPMS devices, all LI20 klystrons)
+
 ## Installation
 
 ### Prerequisites
 
-Before building the OspreyProject MLDP Backend, ensure your system meets the following requirements:
-
-- **Operating System**: Ubuntu 20.04+ (or compatible Linux distribution)
-- **Compiler**: GCC 9+ or Clang 10+ with C++17 support
+- **Operating System**: SLAC computing environment (RHEL/CentOS-based) or Ubuntu 20.04+
+- **Compiler**: GCC 9+ with C++17 support
 - **CMake**: Version 3.13 or higher
-- **Memory**: Minimum 4GB RAM (8GB+ recommended for large datasets)
+- **Memory**: Minimum 8GB RAM (recommended for accelerator datasets)
 
 ### System Dependencies
 
-#### 1. Install Core Build Tools
-
+#### Install Required Libraries
 ```bash
-# Update package manager
-sudo apt update
-
-# Install essential build tools
+# Core dependencies
 sudo apt install -y \
     build-essential \
     cmake \
     git \
-    pkg-config
-```
-
-#### 2. Install Required Libraries
-
-```bash
-# Install core dependencies
-sudo apt install -y \
     libprotobuf-dev \
     libgrpc++-dev \
     protobuf-compiler-grpc \
     protobuf-compiler \
     libhdf5-dev \
-    libhdf5-cpp-103
-```
-
-#### 3. Install Optional Dependencies (Recommended)
-
-```bash
-# Install optional libraries for enhanced functionality
-sudo apt install -y \
-    nlohmann-json3-dev \
-    libxlsxwriter-dev
-```
-
-**Note**: Optional dependencies enable additional export formats and improved JSON handling.
-
-### Data Platform Setup
-
-The project integrates with the Osprey Data Platform. Follow these steps to set up the platform:
-
-#### 1. Clone and Setup Data Platform
-
-```bash
-# Clone the data platform repository in your project root
-git clone https://github.com/osprey-dcs/data-platform.git
-
-# Follow the quick install method from the data-platform documentation
-cd data-platform
-# Follow installation instructions from their README
-```
-
-#### 2. Verify Data Platform Installation
-
-```bash
-# Ensure the data platform is running on localhost:50051
-# Check the data-platform documentation for startup instructions
+    libhdf5-cpp-103 \
+    nlohmann-json3-dev
 ```
 
 ### Building the Project
 
-#### 1. Clone the Repository
-
 ```bash
-git clone <your-repository-url>
+# Clone and build
+git clone <repository-url>
 cd OspreyProject_Slac
-```
-
-#### 2. Configure Data Path (Optional)
-
-If you have specific data files to process, update the path in the source:
-
-```bash
-# Edit the data path in your application
-nano DataProvider/apps/h5_to_dp.cpp
-# Modify any hardcoded paths to match your data location
-```
-
-#### 3. Build the Project
-
-```bash
-# Create and enter build directory
 mkdir build && cd build
-
-# Configure the project with CMake
 cmake ..
-
-# Build using all available CPU cores
 make -j$(nproc)
 ```
-
-#### 4. Verify Build Success
-
-```bash
-# Check that executables were created
-ls -la h5_to_dp
-
-# Test basic functionality (local parsing only)
-./h5_to_dp /path/to/your/h5/files --local-only
-```
-
-### Alternative Installation Methods
-
-#### Using Docker (Coming Soon)
-
-```bash
-# Docker support is planned for future releases
-# This will provide a containerized environment with all dependencies
-```
-
-#### Manual Dependency Installation
-
-If package manager installation fails, you can build dependencies from source:
-
-```bash
-# Example for gRPC (if not available via apt)
-git clone --recurse-submodules -b v1.50.0 https://github.com/grpc/grpc
-cd grpc
-mkdir -p cmake/build
-cd cmake/build
-cmake -DgRPC_INSTALL=ON -DgRPC_BUILD_TESTS=OFF ../..
-make -j$(nproc)
-sudo make install
-```
-
-### Troubleshooting
-
-#### Common Build Issues
-
-**Issue**: CMake cannot find protobuf
-```bash
-# Solution: Install protobuf development packages
-sudo apt install -y libprotobuf-dev protobuf-compiler
-```
-
-**Issue**: HDF5 library not found
-```bash
-# Solution: Install HDF5 development packages
-sudo apt install -y libhdf5-dev libhdf5-cpp-103
-```
-
-**Issue**: gRPC compilation errors
-```bash
-# Solution: Ensure you have the correct gRPC version
-sudo apt install -y libgrpc++-dev protobuf-compiler-grpc
-```
-
-#### Memory Issues During Build
-
-If you encounter memory issues during compilation:
-
-```bash
-# Build with fewer parallel jobs
-make -j2
-
-# Or build without parallelization
-make
-```
-
-#### Runtime Issues
-
-**Issue**: Cannot connect to MLDP server
-- Ensure the data platform is running on `localhost:50051`
-- Check firewall settings
-- Verify the data platform installation
-
-**Issue**: HDF5 file parsing errors
-- Ensure HDF5 files are not corrupted
-- Check file permissions
-- Verify HDF5 file format compatibility
 
 ### Verification
-
-After successful installation, verify everything works:
-
 ```bash
-# Test local parsing (no MLDP connection required)
-./h5_to_dp /path/to/test/data --local-only
+# Test H5 parsing (local only)
+./bin/h5_to_dp /path/to/h5/files --local-only
 
-# Test full integration (requires running data platform)
-./h5_to_dp /path/to/test/data
+# Test data querying
+./bin/query_pv --pv=KLYS_LI20_61_AMPL --date=07-16-2025 --stats-only
 ```
-
-### Next Steps
-
-Once installation is complete:
-
-1. **Configure your data sources** in the application
-2. **Start the data platform** services
-3. **Run your first data ingestion** with `./h5_to_dp`
-4. **Check the Usage section** for detailed command-line options
 
 ## Usage
 
-### Basic Commands
-
+### Data Ingestion Workflow
 ```bash
-# Parse H5 files locally (no MLDP connection)
-./h5_to_dp /path/to/h5/files --local-only
+# Process H5 files with spatial enrichment
+./bin/h5_to_dp /sdf/data/ad/store/bsas/nc_CoAD/2025/07/16/
 
-# Full integration with MLDP (default)
-./h5_to_dp /path/to/h5/files
-
-# Streaming with custom chunk size
-./h5_to_dp /path/to/h5/files --stream-chunk-size=20
-```bash
+# Process with filtering options
+./bin/h5_to_dp /path/to/h5/files --device=KLYS --max-signals=100
 ```
+
+### Data Query Workflow
+```bash
+# Query specific device
+./bin/query_pv --pv=KLYS_LI20_61_AMPL --date=07-16-2025
+
+# Find all beam position monitors
+./bin/query_pv --pattern="BPMS.*" --date=07-16-2025 --stats-only
+
+# Analyze multiple devices
+./bin/query_pv --pvs=KLYS_LI20_61_AMPL,BPMS_DMPH_502_TMITBR --show-values=10
+```
+
 ## Credits
 
 ### Project Team
-
 **Lead Developer & Architect**  
 Nicholas Mamais - *Osprey Distributed Control Systems*  
-- Project conception and architecture design
-- Core C++ backend implementation
-- HDF5 parsing engine and optimization
-- gRPC integration and streaming protocols
+- System architecture and C++ implementation
+- Spatial enrichment algorithms
+- Statistical processing pipeline
+- MongoDB integration and optimization
 
 ### Institutional Affiliations
-
 **Osprey Distributed Control Systems**  
-- Primary development organization
-- Machine Learning Data Platform (MLDP) architecture
-- Scientific data infrastructure expertise
+- MLDP platform development
+- Data infrastructure architecture
 
 **SLAC National Accelerator Laboratory**  
-- Scientific use case requirements
-- Accelerator data acquisition domain expertise
-- Real-world testing and validation environment
+- Accelerator data requirements
+- Scientific use case validation
+- Production testing environment
 
-### Open Source Dependencies
-
-This project builds upon excellent open source technologies:
-
-**Core Technologies**
+### Core Technologies
 - [**gRPC**](https://grpc.io/) - High-performance RPC framework
-- [**Protocol Buffers**](https://developers.google.com/protocol-buffers) - Language-neutral serialization
-- [**HDF5**](https://www.hdfgroup.org/solutions/hdf5/) - High-performance data management library
-- [**CMake**](https://cmake.org/) - Cross-platform build system
-
-**Data Platform Foundation**
-- [**Osprey Data Platform**](https://github.com/osprey-dcs/data-platform) - Core MLDP infrastructure
-- **MongoDB** - Database backend for data storage
-
-**Development Tools**
-- [**nlohmann/json**](https://github.com/nlohmann/json) - Modern C++ JSON library
-- [**xlsxwriter**](https://libxlsxwriter.github.io/) - Excel file generation
-- **Google Test** - Unit testing framework
-- **GitHub Actions** - Continuous integration
-
-
+- [**Protocol Buffers**](https://developers.google.com/protocol-buffers) - Data serialization
+- [**HDF5**](https://www.hdfgroup.org/solutions/hdf5/) - Scientific data format support
+- [**MongoDB**](https://www.mongodb.com/) - Document database backend
+- [**CMake**](https://cmake.org/) - Build system

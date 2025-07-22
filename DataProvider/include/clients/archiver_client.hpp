@@ -12,11 +12,11 @@ using json = nlohmann::json;
 
 // EPICS data point structure
 struct EpicsDataPoint {
-    uint64_t secs;
-    uint64_t nanos;
-    double value;
-    int severity;
-    int status;
+    uint64_t secs = 0;
+    uint64_t nanos = 0;
+    double value = 0.0;
+    int severity = 0;
+    int status = 0;
     std::map<std::string, std::string> fields;
 };
 
@@ -25,7 +25,7 @@ struct EpicsMetadata {
     std::string name;
     std::string description;
     std::map<std::string, std::string> enums;
-    std::map<std::string, std::string> properties; // PREC, DRVH, etc.
+    std::map<std::string, std::string> properties;
 };
 
 // Archiver response structure
@@ -52,13 +52,13 @@ public:
     ~ArchiverClient();
     
     // Single PV query
-    ArchiverResponse queryPv(const std::string& pv_name, 
+    ArchiverResponse queryPv(const std::string& pv_name,
                             const std::string& start_time,
                             const std::string& end_time);
     
     // Multiple PV query
     std::vector<ArchiverResponse> queryPvs(const std::vector<std::string>& pv_names,
-                                          const std::string& start_time, 
+                                          const std::string& start_time,
                                           const std::string& end_time);
     
     // Query with date strings (MM-DD-YYYY format)
@@ -83,7 +83,7 @@ private:
     // Internal methods
     void initializeCurl();
     void cleanup();
-    std::string buildUrl(const std::string& pv_name, 
+    std::string buildUrl(const std::string& pv_name,
                         const std::string& start_time,
                         const std::string& end_time) const;
     std::string performRequest(const std::string& url);

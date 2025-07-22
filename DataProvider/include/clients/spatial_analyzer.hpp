@@ -22,7 +22,7 @@ public:
         
         // Device classification
         std::string category, function;
-        bool controllable;
+        bool controllable = false;
         
         // Signal classification  
         std::string signalType, units, description;
@@ -37,21 +37,39 @@ public:
         bool isValid = false;
     };
 
-    // PHASE 1: Caching structures for optimization
+    // Constructor
+    explicit SpatialAnalyzer(size_t num_threads = std::thread::hardware_concurrency());
+    ~SpatialAnalyzer();
+
+    // Core interface
+    bool loadDictionaries(const std::string& dictionariesPath);
+    SpatialMetadata analyzePV(const std::string& pvName);
+    
+    // Batch processing methods
+    std::vector<SpatialMetadata> analyzePVsBatch(const std::vector<std::string>& pvNames);
+    std::future<std::vector<SpatialMetadata>> analyzePVsAsync(const std::vector<std::string>& pvNames);
+
+    // Cache management
+    void clearCache();
+    size_t getCacheSize() const;
+    void setCacheMaxSize(size_t maxSize);
+
+private:
+    // Caching structures
     struct CachedDeviceInfo {
         std::string category;
         std::string function;
-        bool controllable;
+        bool controllable = false;
         std::vector<std::string> tags;
     };
 
     struct CachedAreaInfo {
-        double z_min, z_max;
+        double z_min = 0.0, z_max = 0.0;
         std::string beamPath;
         std::string description;
     };
 
-    // Simple LRU cache implementation (self-contained)
+    // Simple LRU cache implementation
     template<typename Key, typename Value>
     class SimpleLRUCache {
     private:
@@ -121,86 +139,43 @@ public:
         }
     };
 
-    // Constructor with optimization features
-    explicit SpatialAnalyzer(size_t num_threads = std::thread::hardware_concurrency());
-    ~SpatialAnalyzer();
-
-    // Original interface (preserved for compatibility)
-    bool loadDictionaries(const std::string& dictionariesPath);
-    SpatialMetadata analyzePV(const std::string& pvName);
-    
-    // PHASE 2: New parallel processing methods
-    std::vector<SpatialMetadata> analyzePVsBatch(const std::vector<std::string>& pvNames);
-    std::future<std::vector<SpatialMetadata>> analyzePVsAsync(const std::vector<std::string>& pvNames);
-
-    // Cache management
-    void clearCache();
-    size_t getCacheSize() const;
-    void setCacheMaxSize(size_t maxSize);
-
-    // Performance metrics
-    struct PerformanceMetrics {
-        std::atomic<uint64_t> cache_hits{0};
-        std::atomic<uint64_t> cache_misses{0};
-        std::atomic<uint64_t> total_analyses{0};
-        std::atomic<double> avg_analysis_time_ms{0.0};
-    };
-
-    const PerformanceMetrics& getMetrics() const { return metrics_; }
-
-private:
-    // Original dictionaries
+    // Data members
     json deviceClassifications;
     json beamlineBoundaries;
     
-    // PHASE 1: Pre-computed lookup tables
+    // Pre-computed lookup tables
     std::unordered_map<std::string, CachedDeviceInfo> deviceTypeCache_;
     std::unordered_map<std::string, CachedAreaInfo> areaCache_;
     std::unordered_map<std::string, std::vector<std::string>> patternTagsCache_;
     
-    // PHASE 1: Simple LRU cache for analyzed PVs
+    // LRU cache for analyzed PVs
     mutable std::unique_ptr<SimpleLRUCache<std::string, SpatialMetadata>> pvAnalysisCache_;
     
-    // PHASE 2: Thread pool for parallel processing
+    // Thread pool
     std::vector<std::thread> worker_threads_;
     std::atomic<bool> shutdown_;
     size_t num_threads_;
     
     // Thread safety
     mutable std::shared_mutex cache_mutex_;
-    mutable std::shared_mutex dict_mutex_;
     
-    // Performance tracking
-    mutable PerformanceMetrics metrics_;
-    
-    // PHASE 1: Cache building methods
+    // Cache building methods
     void buildDeviceTypeCache();
     void buildAreaCache();
     void buildPatternCache();
     
-    // Optimized parsing using string_view
+    // Core analysis methods
     bool parsePVNameOptimized(std::string_view pvName, 
                              std::string& deviceType, std::string& area, 
                              std::string& position, std::string& attribute);
     
-    // Cache-aware analysis methods
     void classifyDeviceCached(const std::string& deviceType, SpatialMetadata& metadata);
     void classifySignalCached(const std::string& deviceType, const std::string& attribute, SpatialMetadata& metadata);
     void findCoordinatesCached(const std::string& area, const std::string& position, SpatialMetadata& metadata);
     void generateTagsCached(SpatialMetadata& metadata);
     
-    // PHASE 2: Worker thread methods
+    // Internal methods
     void workerThreadFunction();
     SpatialMetadata analyzePVInternal(const std::string& pvName);
-    
-    // PHASE 4: Memory optimization
     void preallocateVectors(SpatialMetadata& metadata);
-    
-    // Legacy methods (backwards compatibility) - keep original interface
-    bool parsePVName(const std::string& pvName, std::string& deviceType, 
-                     std::string& area, std::string& position, std::string& attribute);
-    void classifyDevice(const std::string& deviceType, SpatialMetadata& metadata);
-    void classifySignal(const std::string& deviceType, const std::string& attribute, SpatialMetadata& metadata);
-    void findCoordinates(const std::string& area, const std::string& position, SpatialMetadata& metadata);
-    void generateTags(SpatialMetadata& metadata);
 };

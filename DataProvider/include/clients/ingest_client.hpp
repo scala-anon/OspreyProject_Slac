@@ -29,8 +29,8 @@ struct IngestClientConfig {
     int max_message_size_mb = 64;
     bool enable_spatial_enrichment = true;
     std::string dictionaries_path = "config/dictionaries/";
-    size_t default_batch_size = 100;        // Optimized default
-    size_t max_batch_size = 1000;           // Optimized max
+    size_t default_batch_size = 100;
+    size_t max_batch_size = 1000;
     bool streaming_preferred = true;
     int retry_attempts = 3;
     int retry_delay_ms = 1000;
@@ -92,7 +92,7 @@ struct IngestionResult {
 class IngestClient {
 public:
     explicit IngestClient(const IngestClientConfig& config);
-    explicit IngestClient(const std::string& config_path_or_server_address = "localhost:50051");
+    explicit IngestClient(const std::string& config_file_path);
     ~IngestClient();
 
     // Provider registration
@@ -104,7 +104,6 @@ public:
     // Data ingestion methods
     std::string ingestData(const IngestDataRequest& request);
     IngestionResult ingestBatch(const std::vector<IngestDataRequest>& requests, const std::string& provider_id);
-    IngestionResult ingestWithSpatialEnrichment(const std::vector<IngestDataRequest>& requests, const std::string& provider_id);
 
     // Configuration and callbacks
     void setProgressCallback(ProgressCallback callback) { progress_callback_ = callback; }
@@ -130,17 +129,16 @@ private:
     ErrorCallback error_callback_;
 
     bool spatial_enrichment_enabled_;
-    mutable std::string last_error_;
 
     // Internal methods
     void initializeConnection();
     void initializeSpatialAnalyzer();
     
-    // PHASE 1: Spatial enrichment with caching
+    // Spatial enrichment with caching
     IngestDataRequest enrichRequest(const IngestDataRequest& request) const;
     std::vector<IngestDataRequest> enrichRequestsBatch(const std::vector<IngestDataRequest>& requests) const;
     
-    // PHASE 3: Bulk operation helpers  
+    // Bulk operation helpers  
     std::string sendBatchToServerStream(const std::vector<IngestDataRequest>& batch);
     std::vector<std::vector<IngestDataRequest>> chunkRequestsToVector(const std::vector<IngestDataRequest>& requests,
                                                                      size_t chunk_size) const;
@@ -171,10 +169,6 @@ namespace IngestUtils {
     uint64_t getCurrentEpochSeconds();
     uint64_t getCurrentEpochNanos();
     std::string generateRequestId(const std::string& prefix = "req");
-    std::vector<Attribute> mergeAttributes(const std::vector<Attribute>& base,
-                                          const std::vector<Attribute>& additional);
-    std::vector<std::string> mergeTags(const std::vector<std::string>& base,
-                                      const std::vector<std::string>& additional);
 }
 
 #endif // INGEST_CLIENT_HPP

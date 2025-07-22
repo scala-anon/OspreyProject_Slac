@@ -7,14 +7,11 @@
 #include <algorithm>
 #include <regex>
 
-// ===================== ArchiverClientConfig Implementation =====================
-
 ArchiverClientConfig ArchiverClientConfig::fromConfigFile(const std::string& config_path) {
     ArchiverClientConfig config;
     try {
         std::ifstream file(config_path);
         if (!file.is_open()) {
-            std::cerr << "Warning: Could not open archiver config file: " << config_path << std::endl;
             return config;
         }
         
@@ -33,13 +30,11 @@ ArchiverClientConfig ArchiverClientConfig::fromConfigFile(const std::string& con
                 config.fetch_metadata = archiver["fetch_metadata"];
             }
         }
-    } catch (const std::exception& e) {
-        std::cerr << "Warning: Error parsing archiver config: " << e.what() << std::endl;
+    } catch (const std::exception&) {
+        // Silent fallback to defaults
     }
     return config;
 }
-
-// ===================== ArchiverClient Implementation =====================
 
 ArchiverClient::ArchiverClient(const ArchiverClientConfig& config) 
     : config_(config), curl_handle_(nullptr) {
@@ -56,15 +51,13 @@ void ArchiverClient::initializeCurl() {
     
     if (!curl_handle_) {
         last_error_ = "Failed to initialize CURL";
-        std::cerr << "Error: " << last_error_ << std::endl;
         return;
     }
     
-    // Set common options
     curl_easy_setopt(curl_handle_, CURLOPT_TIMEOUT, config_.timeout_seconds);
     curl_easy_setopt(curl_handle_, CURLOPT_WRITEFUNCTION, writeCallback);
     curl_easy_setopt(curl_handle_, CURLOPT_FOLLOWLOCATION, 1L);
-    curl_easy_setopt(curl_handle_, CURLOPT_SSL_VERIFYPEER, 0L); // For SLAC internal servers
+    curl_easy_setopt(curl_handle_, CURLOPT_SSL_VERIFYPEER, 0L);
 }
 
 void ArchiverClient::cleanup() {
@@ -161,7 +154,6 @@ std::string ArchiverClient::performRequest(const std::string& url) {
     
     if (result != CURLE_OK) {
         last_error_ = "CURL request failed: " + std::string(curl_easy_strerror(result));
-        std::cerr << "Error: " << last_error_ << std::endl;
         return "";
     }
     
@@ -170,7 +162,6 @@ std::string ArchiverClient::performRequest(const std::string& url) {
     
     if (response_code != 200) {
         last_error_ = "HTTP error: " + std::to_string(response_code);
-        std::cerr << "Error: " << last_error_ << std::endl;
         return "";
     }
     
@@ -190,12 +181,10 @@ ArchiverResponse ArchiverClient::parseJsonResponse(const std::string& json_data)
         
         const auto& pv_data = parsed[0];
         
-        // Parse metadata
         if (pv_data.contains("meta")) {
             response.metadata = parseMetadata(pv_data["meta"]);
         }
         
-        // Parse data points
         if (pv_data.contains("data")) {
             response.data_points = parseDataPoints(pv_data["data"]);
         }
@@ -216,14 +205,13 @@ EpicsMetadata ArchiverClient::parseMetadata(const json& meta_json) const {
         if (key == "name") {
             metadata.name = value.get<std::string>();
         } else if (key.find("ENUM_") == 0) {
-            std::string enum_key = key.substr(5); // Remove "ENUM_" prefix
+            std::string enum_key = key.substr(5);
             metadata.enums[enum_key] = value.get<std::string>();
         } else {
             metadata.properties[key] = value.get<std::string>();
         }
     }
     
-    // Extract description from properties or fields
     if (metadata.properties.find("DESC") != metadata.properties.end()) {
         metadata.description = metadata.properties["DESC"];
     }
@@ -255,7 +243,6 @@ std::vector<EpicsDataPoint> ArchiverClient::parseDataPoints(const json& data_jso
         if (point.contains("severity")) dp.severity = point["severity"].get<int>();
         if (point.contains("status")) dp.status = point["status"].get<int>();
         
-        // Parse additional fields
         if (point.contains("fields")) {
             for (auto& [key, value] : point["fields"].items()) {
                 dp.fields[key] = value.get<std::string>();
@@ -283,15 +270,13 @@ size_t ArchiverClient::writeCallback(void* contents, size_t size, size_t nmemb, 
     return total_size;
 }
 
-// ===================== Static Utility Methods =====================
-
 std::string ArchiverClient::formatTimeString(uint64_t epoch_sec, uint64_t nano_sec) {
     return ArchiverUtils::epochToIsoTime(epoch_sec, nano_sec);
 }
 
 std::string ArchiverClient::dateToIsoString(const std::string& date_str, int hour_offset) {
     uint64_t epoch = parseDate(date_str);
-    epoch += hour_offset * 3600; // Add hour offset
+    epoch += hour_offset * 3600;
     return ArchiverUtils::epochToIsoTime(epoch);
 }
 
@@ -304,8 +289,6 @@ uint64_t ArchiverClient::parseDate(const std::string& date_str) {
     }
     return std::mktime(&tm);
 }
-
-// ===================== ArchiverUtils Implementation =====================
 
 namespace ArchiverUtils {
     
@@ -389,7 +372,7 @@ std::string statusToString(int status) {
 }
 
 bool isValidEpicsValue(double value, int severity, int status) {
-    return std::isfinite(value) && severity < 3; // Not INVALID severity
+    return std::isfinite(value) && severity < 3;
 }
 
-} 
+}

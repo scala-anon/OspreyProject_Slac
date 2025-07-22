@@ -15,14 +15,12 @@ IngestClientConfig IngestClientConfig::fromConfigFile(const std::string& config_
     try {
         std::ifstream file(config_path);
         if (!file.is_open()) {
-            std::cerr << "Warning: Could not open config file: " << config_path << ". Using defaults." << std::endl;
             return config;
         }
         json j;
         file >> j;
         return fromJson(j);
-    } catch (const std::exception& e) {
-        std::cerr << "Warning: Error parsing config file: " << e.what() << ". Using defaults." << std::endl;
+    } catch (const std::exception&) {
         return config;
     }
 }
@@ -78,66 +76,6 @@ IngestClientConfig IngestClientConfig::fromJson(const nlohmann::json& config) {
     return result;
 }
 
-// ===================== Optimized BatchAccumulator Implementation =====================
-
-class BatchAccumulator {
-private:
-    std::vector<IngestDataRequest> pending_requests_;
-    std::chrono::steady_clock::time_point last_batch_time_;
-    mutable std::mutex accumulator_mutex_;  // Remove const for mutex
-    IngestClientConfig config_;
-    
-public:
-    explicit BatchAccumulator(const IngestClientConfig& config) 
-        : config_(config), last_batch_time_(std::chrono::steady_clock::now()) {
-        pending_requests_.reserve(config_.max_batch_size);
-    }
-    
-    bool addRequest(const IngestDataRequest& request) {
-        std::lock_guard<std::mutex> lock(accumulator_mutex_);
-        pending_requests_.push_back(request);
-        return pending_requests_.size() >= config_.default_batch_size;
-    }
-    
-    std::vector<IngestDataRequest> flushIfReady() {
-        std::lock_guard<std::mutex> lock(accumulator_mutex_);
-        
-        auto now = std::chrono::steady_clock::now();
-        auto time_since_last_batch = std::chrono::duration_cast<std::chrono::milliseconds>(now - last_batch_time_);
-        
-        if (pending_requests_.size() >= config_.default_batch_size || time_since_last_batch.count() >= config_.retry_delay_ms) {
-            std::vector<IngestDataRequest> batch;
-            batch.swap(pending_requests_);
-            pending_requests_.reserve(config_.max_batch_size);
-            last_batch_time_ = now;
-            return batch;
-        }
-        
-        return {};
-    }
-    
-    std::vector<IngestDataRequest> forceFlush() {
-        std::lock_guard<std::mutex> lock(accumulator_mutex_);
-        std::vector<IngestDataRequest> batch;
-        batch.swap(pending_requests_);
-        pending_requests_.reserve(config_.max_batch_size);
-        last_batch_time_ = std::chrono::steady_clock::now();
-        return batch;
-    }
-    
-    size_t getPendingCount() {
-        std::lock_guard<std::mutex> lock(accumulator_mutex_);
-        return pending_requests_.size();
-    }
-    
-    bool shouldFlush() {
-        std::lock_guard<std::mutex> lock(accumulator_mutex_);
-        auto now = std::chrono::steady_clock::now();
-        auto time_since_last_batch = std::chrono::duration_cast<std::chrono::milliseconds>(now - last_batch_time_);
-        return pending_requests_.size() >= config_.default_batch_size || time_since_last_batch.count() >= config_.retry_delay_ms;
-    }
-};
-
 // ===================== IngestClient Implementation =====================
 
 IngestClient::IngestClient(const IngestClientConfig& config) 
@@ -148,8 +86,8 @@ IngestClient::IngestClient(const IngestClientConfig& config)
     }
 }
 
-IngestClient::IngestClient(const std::string& config_path_or_server_address) 
-    : IngestClient(IngestClientConfig::fromConfigFile(config_path_or_server_address)) {}
+IngestClient::IngestClient(const std::string& config_file_path) 
+    : IngestClient(IngestClientConfig::fromConfigFile(config_file_path)) {}
 
 IngestClient::~IngestClient() = default;
 
@@ -161,10 +99,7 @@ void IngestClient::initializeConnection() {
     auto channel = grpc::CreateCustomChannel(config_.server_address, grpc::InsecureChannelCredentials(), args);
 
     if (!channel->WaitForConnected(std::chrono::system_clock::now() + std::chrono::seconds(config_.connection_timeout_seconds))) {
-        std::string error = "Failed to connect to MLDP server at " + config_.server_address;
-        std::cerr << error << std::endl;
-        last_error_ = error;
-        throw std::runtime_error("gRPC channel connection timeout");
+        throw std::runtime_error("Failed to connect to server at " + config_.server_address);
     }
 
     stub_ = dp::service::ingestion::DpIngestionService::NewStub(channel);
@@ -174,14 +109,10 @@ void IngestClient::initializeSpatialAnalyzer() {
     try {
         spatial_analyzer_ = std::make_unique<SpatialAnalyzer>(std::thread::hardware_concurrency());
         if (!spatial_analyzer_->loadDictionaries(config_.dictionaries_path)) {
-            std::cerr << "Warning: Failed to load spatial dictionaries. Spatial enrichment disabled." << std::endl;
             spatial_enrichment_enabled_ = false;
             spatial_analyzer_.reset();
-        } else {
-            std::cout << "Spatial enrichment initialized successfully with caching and parallel processing" << std::endl;
         }
-    } catch (const std::exception& e) {
-        std::cerr << "Warning: Error initializing spatial analyzer: " << e.what() << ". Spatial enrichment disabled." << std::endl;
+    } catch (const std::exception&) {
         spatial_enrichment_enabled_ = false;
         spatial_analyzer_.reset();
     }
@@ -193,10 +124,7 @@ RegisterProviderResponse IngestClient::registerProvider(const RegisterProviderRe
     grpc::Status status = stub_->registerProvider(&context, request, &response);
 
     if (!status.ok()) {
-        std::string error = "RegisterProvider RPC failed: " + status.error_message();
-        std::cerr << error << std::endl;
-        last_error_ = error;
-        throw std::runtime_error(error);
+        throw std::runtime_error("RegisterProvider RPC failed: " + status.error_message());
     }
     return response;
 }
@@ -229,18 +157,13 @@ std::string IngestClient::ingestData(const IngestDataRequest& request) {
         if (status.ok()) {
             return "Success: Data ingested";
         } else {
-            std::string error = "IngestData RPC failed: " + status.error_message();
-            last_error_ = error;
-            return error;
+            return "IngestData RPC failed: " + status.error_message();
         }
     } catch (const std::exception& e) {
-        std::string error = "Exception during ingest: " + std::string(e.what());
-        last_error_ = error;
-        return error;
+        return "Exception during ingest: " + std::string(e.what());
     }
 }
 
-// PHASE 3: Optimized batch ingestion with proper protobuf usage
 IngestionResult IngestClient::ingestBatch(const std::vector<IngestDataRequest>& requests, const std::string& provider_id) {
     auto start_time = std::chrono::high_resolution_clock::now();
 
@@ -253,25 +176,16 @@ IngestionResult IngestClient::ingestBatch(const std::vector<IngestDataRequest>& 
         return result;
     }
 
-    std::cout << "Starting optimized batch ingestion for " << requests.size() << " requests" << std::endl;
-
-    // PHASE 2: Parallel spatial enrichment if enabled
+    // Parallel spatial enrichment if enabled
     std::vector<IngestDataRequest> enriched_requests;
     if (spatial_enrichment_enabled_) {
-        auto enrichment_start = std::chrono::high_resolution_clock::now();
         enriched_requests = enrichRequestsBatch(requests);
-        auto enrichment_end = std::chrono::high_resolution_clock::now();
-        
-        double enrichment_time = std::chrono::duration<double>(enrichment_end - enrichment_start).count();
-        std::cout << "Parallel spatial enrichment completed in " << enrichment_time << "s" << std::endl;
     } else {
         enriched_requests = requests;
     }
 
-    // PHASE 3: Use optimized chunking and streaming
+    // Use optimized chunking and streaming
     auto chunks = chunkRequestsToVector(enriched_requests, config_.default_batch_size);
-    
-    std::cout << "Split into " << chunks.size() << " optimized batches" << std::endl;
 
     for (const auto& chunk : chunks) {
         std::string chunk_result;
@@ -304,15 +218,9 @@ IngestionResult IngestClient::ingestBatch(const std::vector<IngestDataRequest>& 
     result.processing_time_seconds = std::chrono::duration<double>(end_time - start_time).count();
     result.success = (result.successful_requests > 0);
 
-    std::cout << "Optimized batch ingestion completed:" << std::endl;
-    std::cout << "  - Success rate: " << (result.getSuccessRate() * 100) << "%" << std::endl;
-    std::cout << "  - Processing time: " << result.processing_time_seconds << "s" << std::endl;
-    std::cout << "  - Throughput: " << (result.successful_requests / result.processing_time_seconds) << " requests/second" << std::endl;
-
     return result;
 }
 
-// PHASE 3: Optimized batch sending using your actual protobuf interface
 std::string IngestClient::sendBatchToServerStream(const std::vector<IngestDataRequest>& batch) {
     if (batch.empty()) {
         return "Success: Empty batch";
@@ -322,10 +230,8 @@ std::string IngestClient::sendBatchToServerStream(const std::vector<IngestDataRe
         grpc::ClientContext context;
         dp::service::ingestion::IngestDataStreamResponse response;
         
-        // Use the correct protobuf method signature: ingestDataStream(context, response)
         auto stream = stub_->ingestDataStream(&context, &response);
         
-        // Send all requests in the batch
         for (const auto& request : batch) {
             if (!stream->Write(request)) {
                 return "Error: Failed to write request to stream";
@@ -346,7 +252,6 @@ std::string IngestClient::sendBatchToServerStream(const std::vector<IngestDataRe
     }
 }
 
-// PHASE 1: Enhanced spatial enrichment using your actual protobuf structure
 IngestDataRequest IngestClient::enrichRequest(const IngestDataRequest& request) const {
     if (!spatial_analyzer_) {
         return request;
@@ -355,20 +260,17 @@ IngestDataRequest IngestClient::enrichRequest(const IngestDataRequest& request) 
     IngestDataRequest enriched = request;
     
     try {
-        // Extract PV name from the correct protobuf structure
         std::string pv_name;
         if (request.has_ingestiondataframe() && 
             request.ingestiondataframe().datacolumns_size() > 0) {
             pv_name = request.ingestiondataframe().datacolumns(0).name();
         } else {
-            return enriched; // Cannot enrich without PV name
+            return enriched;
         }
         
-        // Use cached spatial analysis
         auto spatialData = spatial_analyzer_->analyzePV(pv_name);
         
         if (spatialData.isValid) {
-            // Add spatial metadata as attributes using correct protobuf method
             auto* attr = enriched.add_attributes();
             attr->set_name("z_position");
             attr->set_value(std::to_string(spatialData.zPosition));
@@ -385,20 +287,18 @@ IngestDataRequest IngestClient::enrichRequest(const IngestDataRequest& request) 
             attr->set_name("area");
             attr->set_value(spatialData.area);
             
-            // Add spatial tags
             enriched.add_tags("spatial_enriched");
             for (const auto& tag : spatialData.tags) {
                 enriched.add_tags("spatial_" + tag);
             }
         }
-    } catch (const std::exception& e) {
-        std::cerr << "Error enriching request: " << e.what() << std::endl;
+    } catch (const std::exception&) {
+        // Silent fallback to original request
     }
     
     return enriched;
 }
 
-// PHASE 2: Parallel spatial enrichment for batches
 std::vector<IngestDataRequest> IngestClient::enrichRequestsBatch(const std::vector<IngestDataRequest>& requests) const {
     if (!spatial_analyzer_ || requests.empty()) {
         return requests;
@@ -408,7 +308,6 @@ std::vector<IngestDataRequest> IngestClient::enrichRequestsBatch(const std::vect
     const size_t batch_size = std::max(size_t(1), requests.size() / num_threads);
     std::vector<std::future<std::vector<IngestDataRequest>>> futures;
     
-    // Split work across threads
     for (size_t i = 0; i < requests.size(); i += batch_size) {
         size_t end = std::min(i + batch_size, requests.size());
         std::vector<IngestDataRequest> batch(requests.begin() + i, requests.begin() + end);
@@ -427,7 +326,6 @@ std::vector<IngestDataRequest> IngestClient::enrichRequestsBatch(const std::vect
         futures.push_back(std::move(future));
     }
     
-    // Collect results
     std::vector<IngestDataRequest> all_enriched;
     all_enriched.reserve(requests.size());
     
@@ -439,19 +337,6 @@ std::vector<IngestDataRequest> IngestClient::enrichRequestsBatch(const std::vect
     }
     
     return all_enriched;
-}
-
-IngestionResult IngestClient::ingestWithSpatialEnrichment(const std::vector<IngestDataRequest>& requests, const std::string& provider_id) {
-    if (!spatial_enrichment_enabled_) {
-        std::cout << "Spatial enrichment not enabled, using standard batch ingestion" << std::endl;
-        return ingestBatch(requests, provider_id);
-    }
-
-    std::cout << "Starting spatial-aware batch ingestion for " << requests.size() << " requests" << std::endl;
-    auto result = ingestBatch(requests, provider_id);
-    std::cout << "Spatial-aware ingestion complete." << std::endl;
-    
-    return result;
 }
 
 std::vector<std::vector<IngestDataRequest>> IngestClient::chunkRequestsToVector(const std::vector<IngestDataRequest>& requests, size_t chunk_size) const {
@@ -549,7 +434,7 @@ SamplingClock makeSamplingClock(uint64_t epoch, uint64_t nano, uint64_t periodNa
     SamplingClock clk;
     *clk.mutable_starttime() = makeTimeStamp(epoch, nano);
     clk.set_periodnanos(periodNanos);
-    clk.set_count(count);  // Fixed: use set_count() not set_samplecount()
+    clk.set_count(count);
     return clk;
 }
 
@@ -623,19 +508,5 @@ namespace IngestUtils {
     std::string generateRequestId(const std::string& prefix) {
         return prefix + "_" + std::to_string(getCurrentEpochSeconds()) + "_" +
                std::to_string(std::chrono::high_resolution_clock::now().time_since_epoch().count() % 1000000);
-    }
-
-    std::vector<Attribute> mergeAttributes(const std::vector<Attribute>& base,
-                                          const std::vector<Attribute>& additional) {
-        std::vector<Attribute> result = base;
-        result.insert(result.end(), additional.begin(), additional.end());
-        return result;
-    }
-
-    std::vector<std::string> mergeTags(const std::vector<std::string>& base,
-                                      const std::vector<std::string>& additional) {
-        std::vector<std::string> result = base;
-        result.insert(result.end(), additional.begin(), additional.end());
-        return result;
     }
 }

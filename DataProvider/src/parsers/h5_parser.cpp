@@ -3,7 +3,6 @@
 #include <regex>
 #include <iostream>
 #include <algorithm>
-#include <iomanip>
 #include <ctime>
 #include <stdexcept>
 #include <set>
@@ -20,62 +19,24 @@ H5Parser::~H5Parser() = default;
 
 void H5Parser::enableSpatialEnrichment(bool enable) {
     spatial_enrichment_enabled_ = enable;
-    if (enable) {
-        std::cout << "H5Parser: Spatial enrichment enabled" << std::endl;
-    }
 }
 
 bool H5Parser::parseDirectory() {
     try {
-        std::cout << "=== H5 Directory Parsing ===" << std::endl;
-        std::cout << "Scanning directory: " << h5_directory_ << std::endl;
-        if (spatial_enrichment_enabled_) {
-            std::cout << "Spatial enrichment: ENABLED" << std::endl;
-        }
-
         auto h5_files = discoverH5Files();
-
         if (h5_files.empty()) {
-            std::cerr << "No H5 files found in directory" << std::endl;
             return false;
         }
 
-        std::cout << "Found " << h5_files.size() << " H5 files" << std::endl;
-
         size_t valid_files = 0;
-        size_t total_signals = 0;
-
         for (const auto& filepath : h5_files) {
-            if (matchesNamingConvention(filepath)) {
-                std::cout << "\nParsing: " << std::filesystem::path(filepath).filename() << std::endl;
-
-                size_t signals_before = parsed_signals_.size();
-
-                if (parseFile(filepath)) {
-                    valid_files++;
-                    size_t signals_added = parsed_signals_.size() - signals_before;
-                    total_signals += signals_added;
-                    std::cout << "  Success: " << signals_added << " signals parsed" << std::endl;
-                } else {
-                    std::cerr << "  Failed to parse file" << std::endl;
-                }
-            } else {
-                std::cout << "Skipping file with invalid naming: "
-                          << std::filesystem::path(filepath).filename() << std::endl;
+            if (matchesNamingConvention(filepath) && parseFile(filepath)) {
+                valid_files++;
             }
         }
 
-        std::cout << "\n=== Parsing Summary ===" << std::endl;
-        std::cout << "Valid files processed: " << valid_files << "/" << h5_files.size() << std::endl;
-        std::cout << "Total signals parsed: " << total_signals << std::endl;
-        if (spatial_enrichment_enabled_) {
-            std::cout << "Signals prepared for spatial enrichment during ingestion" << std::endl;
-        }
-
         return valid_files > 0;
-
-    } catch (const std::exception& e) {
-        std::cerr << "Error in parseDirectory: " << e.what() << std::endl;
+    } catch (const std::exception&) {
         return false;
     }
 }
@@ -96,20 +57,13 @@ bool H5Parser::parseFile(const std::string& filepath) {
         }
 
         if (!timestamps || timestamps->count == 0) {
-            std::cerr << "  No valid timestamps found" << std::endl;
             return false;
         }
 
         auto signal_names = getSignalDatasets(file);
-
-        std::cout << "  Found " << signal_names.size() << " signals with "
-                  << timestamps->count << " timestamps";
-        if (timestamps->is_regular_sampling) {
-            std::cout << " (regular " << (1000000000.0 / timestamps->period_nanos) << " Hz)";
-        } else {
-            std::cout << " (irregular sampling)";
+        if (signal_names.empty()) {
+            return false;
         }
-        std::cout << std::endl;
 
         size_t successful_signals = 0;
         for (const auto& signal_name : signal_names) {
@@ -117,38 +71,24 @@ bool H5Parser::parseFile(const std::string& filepath) {
                 SignalData signal_data = processSignal(file, signal_name, timestamps, file_metadata);
 
                 if (validateDataConsistency(signal_data.values, *timestamps, signal_name)) {
-                    // Add spatial enrichment flag if enabled
                     if (spatial_enrichment_enabled_) {
                         signal_data.spatial_enrichment_ready = true;
                     }
                     
                     parsed_signals_.push_back(std::move(signal_data));
                     successful_signals++;
-                } else {
-                    std::cerr << "    Data validation failed for: " << signal_name << std::endl;
                 }
-
-            } catch (const std::exception& e) {
-                std::cerr << "    Failed to process signal " << signal_name
-                          << ": " << e.what() << std::endl;
+            } catch (const std::exception&) {
                 continue;
             }
         }
 
         file.close();
+        return successful_signals > 0;
 
-        if (successful_signals == 0) {
-            std::cerr << "  No signals successfully processed" << std::endl;
-            return false;
-        }
-
-        return true;
-
-    } catch (const H5::Exception& e) {
-        std::cerr << "  HDF5 error: " << e.getDetailMsg() << std::endl;
+    } catch (const H5::Exception&) {
         return false;
-    } catch (const std::exception& e) {
-        std::cerr << "  Error: " << e.what() << std::endl;
+    } catch (const std::exception&) {
         return false;
     }
 }
@@ -162,8 +102,8 @@ std::vector<std::string> H5Parser::discoverH5Files() const {
                 h5_files.push_back(entry.path().string());
             }
         }
-    } catch (const std::filesystem::filesystem_error& e) {
-        std::cerr << "Filesystem error: " << e.what() << std::endl;
+    } catch (const std::filesystem::filesystem_error&) {
+        // Silent failure
     }
 
     std::sort(h5_files.begin(), h5_files.end());
@@ -202,12 +142,7 @@ H5FileMetadata H5Parser::parseFilename(const std::string& filepath) const {
 
         metadata.file_timestamp_seconds = parseTimestamp(metadata.date, metadata.time);
         metadata.valid_timestamp = (metadata.file_timestamp_seconds > 0);
-
-        std::cout << "  Parsed metadata: " << metadata.origin << "_" << metadata.pathway
-                  << " " << metadata.date << "_" << metadata.time
-                  << " project=" << metadata.project << std::endl;
     } else {
-        std::cerr << "  Warning: Filename doesn't match expected pattern: " << filename << std::endl;
         metadata.origin = "unknown";
         metadata.pathway = "unknown";
         metadata.project = "unknown";
@@ -245,9 +180,7 @@ uint64_t H5Parser::parseTimestamp(const std::string& date, const std::string& ti
         std::time_t time_t_val = std::mktime(&tm);
         return static_cast<uint64_t>(time_t_val);
 
-    } catch (const std::exception& e) {
-        std::cerr << "    Warning: Failed to parse timestamp " << date << "_" << time
-                  << ": " << e.what() << std::endl;
+    } catch (const std::exception&) {
         return 0;
     }
 }
@@ -303,15 +236,9 @@ std::shared_ptr<TimestampData> H5Parser::extractTimestamps(H5::H5File& file) con
         seconds_ds.close();
         seconds_space.close();
 
-        std::cout << "  Extracted " << timestamps->count << " timestamps, period="
-                  << timestamps->period_nanos << "ns, regular="
-                  << (timestamps->is_regular_sampling ? "yes" : "no") << std::endl;
-
-    } catch (const H5::Exception& e) {
-        std::cerr << "  HDF5 error reading timestamps: " << e.getDetailMsg() << std::endl;
+    } catch (const H5::Exception&) {
         return nullptr;
-    } catch (const std::exception& e) {
-        std::cerr << "  Error reading timestamps: " << e.what() << std::endl;
+    } catch (const std::exception&) {
         return nullptr;
     }
 
@@ -340,8 +267,8 @@ std::vector<std::string> H5Parser::getSignalDatasets(H5::H5File& file) const {
 
         root.close();
 
-    } catch (const H5::Exception& e) {
-        std::cerr << "  Error reading dataset names: " << e.getDetailMsg() << std::endl;
+    } catch (const H5::Exception&) {
+        // Silent failure
     }
 
     return signal_names;
@@ -362,9 +289,7 @@ SignalInfo H5Parser::parseSignalName(const std::string& signal_name) const {
 
         info.units = inferUnits(info.device_attribute);
         info.signal_type = inferSignalType(info.device_attribute);
-
     } else {
-        std::cerr << "    Warning: Signal name doesn't match pattern: " << signal_name << std::endl;
         info.device = "unknown";
         info.device_area = "unknown";
         info.device_location = "unknown";
@@ -446,7 +371,7 @@ SignalData H5Parser::processSignal(H5::H5File& file,
         if (ndims == 1) {
             try {
                 dataset.read(signal_data.values.data(), H5::PredType::NATIVE_DOUBLE);
-            } catch (const H5::Exception& e) {
+            } catch (const H5::Exception&) {
                 std::vector<float> float_values(dims[0]);
                 dataset.read(float_values.data(), H5::PredType::NATIVE_FLOAT);
                 for (size_t i = 0; i < float_values.size(); ++i) {
@@ -464,7 +389,7 @@ SignalData H5Parser::processSignal(H5::H5File& file,
 
                 try {
                     dataset.read(signal_data.values.data(), H5::PredType::NATIVE_DOUBLE, memspace, dataspace);
-                } catch (const H5::Exception& e) {
+                } catch (const H5::Exception&) {
                     std::vector<float> float_values(dims[0]);
                     dataset.read(float_values.data(), H5::PredType::NATIVE_FLOAT, memspace, dataspace);
                     for (size_t i = 0; i < float_values.size(); ++i) {
@@ -481,7 +406,7 @@ SignalData H5Parser::processSignal(H5::H5File& file,
 
                 try {
                     dataset.read(signal_data.values.data(), H5::PredType::NATIVE_DOUBLE, memspace, dataspace);
-                } catch (const H5::Exception& e) {
+                } catch (const H5::Exception&) {
                     std::vector<float> float_values(dims[1]);
                     dataset.read(float_values.data(), H5::PredType::NATIVE_FLOAT, memspace, dataspace);
                     for (size_t i = 0; i < float_values.size(); ++i) {
@@ -500,7 +425,7 @@ SignalData H5Parser::processSignal(H5::H5File& file,
 
             try {
                 dataset.read(signal_data.values.data(), H5::PredType::NATIVE_DOUBLE, memspace, dataspace);
-            } catch (const H5::Exception& e) {
+            } catch (const H5::Exception&) {
                 std::vector<float> float_values(dims[time_dim_index]);
                 dataset.read(float_values.data(), H5::PredType::NATIVE_FLOAT, memspace, dataspace);
                 for (size_t i = 0; i < float_values.size(); ++i) {
@@ -541,7 +466,7 @@ std::string H5Parser::readStringAttribute(H5::DataSet& dataset, const std::strin
 
         attribute.close();
 
-    } catch (const H5::Exception& e) {
+    } catch (const H5::Exception&) {
         // Attribute reading is optional
     }
 
@@ -616,13 +541,10 @@ bool H5Parser::validateDataConsistency(const std::vector<double>& values,
                                        const TimestampData& timestamps,
                                        const std::string& signal_name) const {
     if (values.size() != timestamps.count) {
-        std::cerr << "    Size mismatch for " << signal_name << ": values="
-                  << values.size() << ", timestamps=" << timestamps.count << std::endl;
         return false;
     }
 
     if (values.empty()) {
-        std::cerr << "    Empty values array for " << signal_name << std::endl;
         return false;
     }
 
@@ -633,16 +555,7 @@ bool H5Parser::validateDataConsistency(const std::vector<double>& values,
         }
     }
 
-    if (invalid_count == values.size()) {
-        std::cerr << "    All values are NaN/infinite for " << signal_name << std::endl;
-        return false;
-    }
-
-    if (invalid_count > values.size() / 2) {
-        std::cerr << "    Warning: " << invalid_count << "/" << values.size()
-                  << " invalid values for " << signal_name << std::endl;
-    }
-
+    // Allow signals with all NaN/inf values
     return true;
 }
 
@@ -719,89 +632,4 @@ std::vector<H5FileMetadata> H5Parser::getFileMetadata() const {
         }
     }
     return metadata_list;
-}
-
-void H5Parser::printSummary() const {
-    std::cout << "\n=== H5 Parser Summary ===" << std::endl;
-    std::cout << "Total signals parsed: " << parsed_signals_.size() << std::endl;
-    std::cout << "Total files processed: " << file_timestamps_.size() << std::endl;
-
-    if (!parsed_signals_.empty()) {
-        size_t total_points = 0;
-        for (const auto& signal : parsed_signals_) {
-            total_points += signal.values.size();
-        }
-        std::cout << "Total data points: " << total_points << std::endl;
-
-        printDeviceSummary();
-        printDeviceAreaSummary();
-        printProjectSummary();
-    }
-}
-
-void H5Parser::printDetailedSummary() const {
-    printDeviceSummary();
-    printDeviceAreaSummary();
-    printProjectSummary();
-    printTimingSummary();
-
-    std::cout << "\nSignal Types:" << std::endl;
-    std::map<std::string, size_t> signal_type_counts;
-    for (const auto& signal : parsed_signals_) {
-        signal_type_counts[signal.info.signal_type]++;
-    }
-    for (const auto& [type, count] : signal_type_counts) {
-        std::cout << "  " << type << ": " << count << " signals" << std::endl;
-    }
-}
-
-void H5Parser::printDeviceSummary() const {
-    std::cout << "\nDevices:" << std::endl;
-    std::map<std::string, size_t> device_counts;
-    for (const auto& signal : parsed_signals_) {
-        device_counts[signal.info.device]++;
-    }
-    for (const auto& [device, count] : device_counts) {
-        std::cout << "  " << device << ": " << count << " signals" << std::endl;
-    }
-}
-
-void H5Parser::printDeviceAreaSummary() const {
-    std::cout << "\nDevice Areas:" << std::endl;
-    std::map<std::string, size_t> area_counts;
-    for (const auto& signal : parsed_signals_) {
-        area_counts[signal.info.device_area]++;
-    }
-    for (const auto& [area, count] : area_counts) {
-        std::cout << "  " << area << ": " << count << " signals" << std::endl;
-    }
-}
-
-void H5Parser::printProjectSummary() const {
-    std::cout << "\nProjects:" << std::endl;
-    std::map<std::string, size_t> project_counts;
-    for (const auto& signal : parsed_signals_) {
-        project_counts[signal.file_metadata.project]++;
-    }
-    for (const auto& [project, count] : project_counts) {
-        std::cout << "  " << project << ": " << count << " signals" << std::endl;
-    }
-}
-
-void H5Parser::printTimingSummary() const {
-    if (file_timestamps_.empty()) return;
-
-    std::cout << "\nTiming Summary:" << std::endl;
-    for (const auto& [filepath, timestamps] : file_timestamps_) {
-        std::filesystem::path path(filepath);
-        std::cout << "  " << path.filename().string() << ":" << std::endl;
-        std::cout << "    Samples: " << timestamps->count << std::endl;
-        std::cout << "    Period: " << timestamps->period_nanos << " ns";
-        if (timestamps->period_nanos > 0) {
-            std::cout << " (" << std::fixed << std::setprecision(1)
-                      << (1000000000.0 / timestamps->period_nanos) << " Hz)";
-        }
-        std::cout << std::endl;
-        std::cout << "    Regular: " << (timestamps->is_regular_sampling ? "Yes" : "No") << std::endl;
-    }
 }

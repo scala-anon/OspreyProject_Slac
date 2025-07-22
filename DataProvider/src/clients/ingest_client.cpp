@@ -41,16 +41,6 @@ IngestClientConfig IngestClientConfig::fromJson(const nlohmann::json& config) {
         }
     }
     
-    if (config.contains("spatial_enrichment")) {
-        const auto& spatial = config["spatial_enrichment"];
-        if (spatial.contains("enabled")) {
-            result.enable_spatial_enrichment = spatial["enabled"];
-        }
-        if (spatial.contains("dictionaries_path")) {
-            result.dictionaries_path = spatial["dictionaries_path"];
-        }
-    }
-    
     if (config.contains("ingestion_settings")) {
         const auto& ingest = config["ingestion_settings"];
         if (ingest.contains("default_batch_size")) {
@@ -79,11 +69,8 @@ IngestClientConfig IngestClientConfig::fromJson(const nlohmann::json& config) {
 // ===================== IngestClient Implementation =====================
 
 IngestClient::IngestClient(const IngestClientConfig& config) 
-    : config_(config), spatial_enrichment_enabled_(config.enable_spatial_enrichment) {
+    : config_(config), spatial_enrichment_enabled_(false) {
     initializeConnection();
-    if (config_.enable_spatial_enrichment) {
-        initializeSpatialAnalyzer();
-    }
 }
 
 IngestClient::IngestClient(const std::string& config_file_path) 
@@ -103,19 +90,6 @@ void IngestClient::initializeConnection() {
     }
 
     stub_ = dp::service::ingestion::DpIngestionService::NewStub(channel);
-}
-
-void IngestClient::initializeSpatialAnalyzer() {
-    try {
-        spatial_analyzer_ = std::make_unique<SpatialAnalyzer>(std::thread::hardware_concurrency());
-        if (!spatial_analyzer_->loadDictionaries(config_.dictionaries_path)) {
-            spatial_enrichment_enabled_ = false;
-            spatial_analyzer_.reset();
-        }
-    } catch (const std::exception&) {
-        spatial_enrichment_enabled_ = false;
-        spatial_analyzer_.reset();
-    }
 }
 
 RegisterProviderResponse IngestClient::registerProvider(const RegisterProviderRequest& request) {
@@ -147,12 +121,10 @@ RegisterProviderResponse IngestClient::registerProvider(const std::string& name,
 }
 
 std::string IngestClient::ingestData(const IngestDataRequest& request) {
-    IngestDataRequest enriched_request = spatial_enrichment_enabled_ ? enrichRequest(request) : request;
-    
     try {
         dp::service::ingestion::IngestDataResponse response;
         grpc::ClientContext context;
-        grpc::Status status = stub_->ingestData(&context, enriched_request, &response);
+        grpc::Status status = stub_->ingestData(&context, request, &response);
 
         if (status.ok()) {
             return "Success: Data ingested";
@@ -176,16 +148,7 @@ IngestionResult IngestClient::ingestBatch(const std::vector<IngestDataRequest>& 
         return result;
     }
 
-    // Parallel spatial enrichment if enabled
-    std::vector<IngestDataRequest> enriched_requests;
-    if (spatial_enrichment_enabled_) {
-        enriched_requests = enrichRequestsBatch(requests);
-    } else {
-        enriched_requests = requests;
-    }
-
-    // Use optimized chunking and streaming
-    auto chunks = chunkRequestsToVector(enriched_requests, config_.default_batch_size);
+    auto chunks = chunkRequestsToVector(requests, config_.default_batch_size);
 
     for (const auto& chunk : chunks) {
         std::string chunk_result;
@@ -193,7 +156,6 @@ IngestionResult IngestClient::ingestBatch(const std::vector<IngestDataRequest>& 
         if (config_.streaming_preferred && chunk.size() > 1) {
             chunk_result = sendBatchToServerStream(chunk);
         } else {
-            // Process individually for small batches
             for (const auto& request : chunk) {
                 chunk_result = ingestData(request);
                 if (chunk_result.find("Success") == std::string::npos) {
@@ -252,93 +214,6 @@ std::string IngestClient::sendBatchToServerStream(const std::vector<IngestDataRe
     }
 }
 
-IngestDataRequest IngestClient::enrichRequest(const IngestDataRequest& request) const {
-    if (!spatial_analyzer_) {
-        return request;
-    }
-    
-    IngestDataRequest enriched = request;
-    
-    try {
-        std::string pv_name;
-        if (request.has_ingestiondataframe() && 
-            request.ingestiondataframe().datacolumns_size() > 0) {
-            pv_name = request.ingestiondataframe().datacolumns(0).name();
-        } else {
-            return enriched;
-        }
-        
-        auto spatialData = spatial_analyzer_->analyzePV(pv_name);
-        
-        if (spatialData.isValid) {
-            auto* attr = enriched.add_attributes();
-            attr->set_name("z_position");
-            attr->set_value(std::to_string(spatialData.zPosition));
-            
-            attr = enriched.add_attributes();
-            attr->set_name("beam_path");
-            attr->set_value(spatialData.beamPath);
-            
-            attr = enriched.add_attributes();
-            attr->set_name("device_type");
-            attr->set_value(spatialData.deviceType);
-            
-            attr = enriched.add_attributes();
-            attr->set_name("area");
-            attr->set_value(spatialData.area);
-            
-            enriched.add_tags("spatial_enriched");
-            for (const auto& tag : spatialData.tags) {
-                enriched.add_tags("spatial_" + tag);
-            }
-        }
-    } catch (const std::exception&) {
-        // Silent fallback to original request
-    }
-    
-    return enriched;
-}
-
-std::vector<IngestDataRequest> IngestClient::enrichRequestsBatch(const std::vector<IngestDataRequest>& requests) const {
-    if (!spatial_analyzer_ || requests.empty()) {
-        return requests;
-    }
-    
-    const size_t num_threads = std::thread::hardware_concurrency();
-    const size_t batch_size = std::max(size_t(1), requests.size() / num_threads);
-    std::vector<std::future<std::vector<IngestDataRequest>>> futures;
-    
-    for (size_t i = 0; i < requests.size(); i += batch_size) {
-        size_t end = std::min(i + batch_size, requests.size());
-        std::vector<IngestDataRequest> batch(requests.begin() + i, requests.begin() + end);
-        
-        auto future = std::async(std::launch::async, [this, batch]() {
-            std::vector<IngestDataRequest> enriched_batch;
-            enriched_batch.reserve(batch.size());
-            
-            for (const auto& request : batch) {
-                enriched_batch.push_back(enrichRequest(request));
-            }
-            
-            return enriched_batch;
-        });
-        
-        futures.push_back(std::move(future));
-    }
-    
-    std::vector<IngestDataRequest> all_enriched;
-    all_enriched.reserve(requests.size());
-    
-    for (auto& future : futures) {
-        auto batch_results = future.get();
-        all_enriched.insert(all_enriched.end(), 
-                           std::make_move_iterator(batch_results.begin()),
-                           std::make_move_iterator(batch_results.end()));
-    }
-    
-    return all_enriched;
-}
-
 std::vector<std::vector<IngestDataRequest>> IngestClient::chunkRequestsToVector(const std::vector<IngestDataRequest>& requests, size_t chunk_size) const {
     std::vector<std::vector<IngestDataRequest>> chunks;
     chunks.reserve((requests.size() + chunk_size - 1) / chunk_size);
@@ -352,29 +227,15 @@ std::vector<std::vector<IngestDataRequest>> IngestClient::chunkRequestsToVector(
 }
 
 void IngestClient::enableSpatialEnrichment(bool enable) {
-    if (enable && !spatial_analyzer_) {
-        initializeSpatialAnalyzer();
-    }
-    spatial_enrichment_enabled_ = enable && (spatial_analyzer_ != nullptr);
+    spatial_enrichment_enabled_ = false; // Always disabled for fast ingestion
 }
 
 bool IngestClient::isSpatialEnrichmentEnabled() const {
-    return spatial_enrichment_enabled_ && (spatial_analyzer_ != nullptr);
+    return false; // Always disabled
 }
 
 SpatialContext IngestClient::enrichPvName(const std::string& pv_name) const {
-    SpatialContext context;
-    if (spatial_analyzer_) {
-        auto metadata = spatial_analyzer_->analyzePV(pv_name);
-        context.beam_path = metadata.beamPath;
-        context.area = metadata.area;
-        context.device_type = metadata.deviceType;
-        context.device_location = metadata.position;
-        context.device_attribute = metadata.attribute;
-        context.full_pv_name = pv_name;
-        context.z_coordinates = {metadata.zPosition};
-    }
-    return context;
+    return SpatialContext{}; // Return empty context
 }
 
 bool IngestClient::isConnected() const {
@@ -388,9 +249,6 @@ void IngestClient::reconnect() {
 void IngestClient::updateConfig(const IngestClientConfig& config) {
     config_ = config;
     initializeConnection();
-    if (config_.enable_spatial_enrichment) {
-        initializeSpatialAnalyzer();
-    }
 }
 
 void IngestClient::notifyProgress(size_t processed, size_t total, size_t successful) const {

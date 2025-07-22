@@ -29,8 +29,8 @@ struct IngestClientConfig {
     int max_message_size_mb = 64;
     bool enable_spatial_enrichment = true;
     std::string dictionaries_path = "config/dictionaries/";
-    size_t default_batch_size = 10;
-    size_t max_batch_size = 100;
+    size_t default_batch_size = 100;        // Optimized default
+    size_t max_batch_size = 1000;           // Optimized max
     bool streaming_preferred = true;
     int retry_attempts = 3;
     int retry_delay_ms = 1000;
@@ -85,42 +85,30 @@ struct IngestionResult {
     double processing_time_seconds = 0.0;
 
     double getSuccessRate() const {
-        return total_requests > 0 ? (double)successful_requests / total_requests : 0.0;
+        return total_requests > 0 ? static_cast<double>(successful_requests) / total_requests : 0.0;
     }
 };
 
-// Main IngestClient class
 class IngestClient {
 public:
     explicit IngestClient(const IngestClientConfig& config);
-    explicit IngestClient(const std::string& server_address = "localhost:50051");
-    explicit IngestClient(const std::string& config_path, bool is_config_file);
-
+    explicit IngestClient(const std::string& config_path_or_server_address = "localhost:50051");
     ~IngestClient();
 
-    // Provider management
+    // Provider registration
     RegisterProviderResponse registerProvider(const RegisterProviderRequest& request);
     RegisterProviderResponse registerProvider(const std::string& name,
-                                            const std::vector<Attribute>& attributes = {},
-                                            const std::vector<std::string>& tags = {});
+                                             const std::vector<Attribute>& attributes,
+                                             const std::vector<std::string>& tags);
 
-    // Core ingestion methods
+    // Data ingestion methods
     std::string ingestData(const IngestDataRequest& request);
-    std::string ingestDataStream(const std::vector<IngestDataRequest>& requests);
+    IngestionResult ingestBatch(const std::vector<IngestDataRequest>& requests, const std::string& provider_id);
+    IngestionResult ingestWithSpatialEnrichment(const std::vector<IngestDataRequest>& requests, const std::string& provider_id);
 
-    // Batch ingestion with spatial enrichment
-    IngestionResult ingestBatch(const std::vector<IngestDataRequest>& requests,
-                               const std::string& provider_id = "");
-
-    // Spatial-aware ingestion (main new feature)
-    IngestionResult ingestWithSpatialEnrichment(const std::vector<IngestDataRequest>& requests,
-                                               const std::string& provider_id = "");
-
-    // Progress monitoring
+    // Configuration and callbacks
     void setProgressCallback(ProgressCallback callback) { progress_callback_ = callback; }
     void setErrorCallback(ErrorCallback callback) { error_callback_ = callback; }
-
-    // Configuration
     const IngestClientConfig& getConfig() const { return config_; }
     void updateConfig(const IngestClientConfig& config);
 
@@ -147,9 +135,17 @@ private:
     // Internal methods
     void initializeConnection();
     void initializeSpatialAnalyzer();
+    
+    // PHASE 1: Spatial enrichment with caching
     IngestDataRequest enrichRequest(const IngestDataRequest& request) const;
+    std::vector<IngestDataRequest> enrichRequestsBatch(const std::vector<IngestDataRequest>& requests) const;
+    
+    // PHASE 3: Bulk operation helpers  
+    std::string sendBatchToServerStream(const std::vector<IngestDataRequest>& batch);
     std::vector<std::vector<IngestDataRequest>> chunkRequestsToVector(const std::vector<IngestDataRequest>& requests,
                                                                      size_t chunk_size) const;
+    
+    // Monitoring and callbacks
     void notifyProgress(size_t processed, size_t total, size_t successful) const;
     void notifyError(const std::string& error, const std::string& context) const;
 };
@@ -169,9 +165,6 @@ IngestDataRequest makeIngestDataRequest(const std::string& providerId, const std
                                        const std::vector<Attribute>& attributes, const std::vector<std::string>& tags,
                                        const EventMetadata& metadata, const SamplingClock& samplingClock,
                                        const std::vector<DataColumn>& dataColumns);
-RegisterProviderRequest makeRegisterProviderRequest(const std::string& providerName,
-                                                   const std::vector<Attribute>& attributes,
-                                                   uint64_t epoch, uint64_t nano);
 
 // Utility functions
 namespace IngestUtils {

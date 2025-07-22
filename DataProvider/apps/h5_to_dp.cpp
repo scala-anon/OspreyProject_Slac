@@ -82,7 +82,20 @@ private:
                 timestamps->start_time_nano = dims[0] > 0 ? timestamps->nanoseconds[0] : 0;
                 timestamps->end_time_sec = dims[0] > 0 ? timestamps->seconds[dims[0]-1] : 0;
                 timestamps->end_time_nano = dims[0] > 0 ? timestamps->nanoseconds[dims[0]-1] : 0;
-                timestamps->period_nanos = 1000000000; // 1 second default
+                
+                // Calculate actual sampling period from timestamps
+                if (dims[0] > 1) {
+                    uint64_t first_time = timestamps->seconds[0] * 1000000000ULL + timestamps->nanoseconds[0];
+                    uint64_t second_time = timestamps->seconds[1] * 1000000000ULL + timestamps->nanoseconds[1];
+                    timestamps->period_nanos = second_time - first_time;
+                    
+                    // Validate period (between 1ms and 10s)
+                    if (timestamps->period_nanos < 1000000 || timestamps->period_nanos > 10000000000ULL) {
+                        timestamps->period_nanos = 1000000000; // fallback to 1s
+                    }
+                } else {
+                    timestamps->period_nanos = 1000000000; // 1 second default
+                }
                 timestamps->is_regular_sampling = true;
                 
                 seconds_ds.close();
@@ -237,6 +250,21 @@ std::vector<IngestDataRequest> createRequests(const std::vector<SignalData>& sig
 
         std::vector<DataColumn> dataColumns;
         dataColumns.push_back(makeDataColumn(signal.info.full_name, dataValues));
+        
+        // Add timestamp columns if we have timestamp data
+        if (signal.timestamps->seconds.size() == signal.values.size()) {
+            std::vector<DataValue> timestampSeconds, timestampNanos;
+            timestampSeconds.reserve(signal.timestamps->seconds.size());
+            timestampNanos.reserve(signal.timestamps->nanoseconds.size());
+            
+            for (size_t j = 0; j < signal.timestamps->seconds.size(); ++j) {
+                timestampSeconds.push_back(makeDataValueWithUInt64(signal.timestamps->seconds[j]));
+                timestampNanos.push_back(makeDataValueWithUInt64(signal.timestamps->nanoseconds[j]));
+            }
+            
+            dataColumns.push_back(makeDataColumn(signal.info.full_name + "_timestamp_seconds", timestampSeconds));
+            dataColumns.push_back(makeDataColumn(signal.info.full_name + "_timestamp_nanos", timestampNanos));
+        }
 
         requests.push_back(makeIngestDataRequest(providerId, requestId, attributes, tags,
                                                  eventMetadata, samplingClock, dataColumns));

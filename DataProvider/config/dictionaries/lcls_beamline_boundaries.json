@@ -1,34 +1,170 @@
 {
+  "metadata": {
+    "document_version": "LCLSII-2.1-PR-0134-R7",
+    "mad_deck_release": "17OCT23",
+    "last_updated": "2025-01-22"
+  },
   "areas": {
-    "DMPH": {
-      "beam_path": "CU_HXR",
-      "description": "HXR post-undulator line",
-      "z_range": [3718.483, 3734.407],
-      "sector": "92H",
-      "devices": {
-        "502": {
-          "z_position": 3718.483,
-          "z_uncertainty": 0.050
-        }
-      }
+    "GUNB": {
+      "beam_path": ["SC_SXR", "SC_SFTS", "SC_S2_X", "SC_STXI", "SC_TMO", "SC_HXR", "SC_BSYD", "SC_DIAG0", "SC_DASEL"],
+      "description": "gun, buncher, solenoids, diagnostics",
+      "z_range": [-10.045, -7.992],
+      "sector": "S00",
+      "beam_system": "superconducting",
+      "function": "electron_source",
+      "devices": {}
     },
-    "LI23": {
-      "beam_path": "CU_HXR",
-      "description": "Linac Sector 23",
-      "z_range": [2300.0, 2400.0],
-      "sector": "23",
-      "devices": {
-        "21": {
-          "z_position": 2350.0,
-          "z_uncertainty": 1.0
-        }
-      }
+    "L0B": {
+      "beam_path": ["SC_SXR", "SC_SFTS", "SC_S2_X", "SC_STXI", "SC_TMO", "SC_HXR", "SC_BSYD", "SC_DIAG0", "SC_DASEL"],
+      "description": "L0B linac (special short end cap, cryomodule CM01, standard end cap, mechanical stay-clear)",
+      "z_range": [-7.992, 7.880],
+      "sector": "S00",
+      "beam_system": "superconducting",
+      "function": "acceleration",
+      "devices": {}
+    },
+    "HTR": {
+      "beam_path": ["SC_SXR", "SC_SFTS", "SC_S2_X", "SC_STXI", "SC_TMO", "SC_HXR", "SC_BSYD", "SC_DIAG0", "SC_DASEL"],
+      "description": "matching, emittance measurement, laser heater, extraction to DIAG0",
+      "z_range": [7.880, 32.184],
+      "sector": "S00",
+      "beam_system": "superconducting",
+      "function": "beam_conditioning",
+      "devices": {}
+    },
+    "DIAG0": {
+      "beam_path": ["SC_DIAG0"],
+      "description": "post-laser-heater diagnostics",
+      "z_range": [32.184, 51.897],
+      "sector": "S00",
+      "beam_system": "superconducting",
+      "function": "diagnostics",
+      "devices": {}
+    },
+    "COL0": {
+      "beam_path": ["SC_SXR", "SC_SFTS", "SC_S2_X", "SC_STXI", "SC_TMO", "SC_HXR", "SC_BSYD", "SC_DASEL"],
+      "description": "C0 collimation section",
+      "z_range": [32.184, 75.906],
+      "sector": "S00",
+      "beam_system": "superconducting",
+      "function": "collimation",
+      "devices": {}
+    },
+    "L1B": {
+      "beam_path": ["SC_SXR", "SC_SFTS", "SC_S2_X", "SC_STXI", "SC_TMO", "SC_HXR", "SC_BSYD", "SC_DASEL"],
+      "description": "L1B linac (MSC, standard end cap, cryomodules CM02-03, harmonic linearizer cryomodules CMH1-2, standard end cap, MSC)",
+      "z_range": [75.906, 119.419],
+      "sector": "S01",
+      "beam_system": "superconducting",
+      "function": "acceleration",
+      "devices": {}
+    },
+    "BC1B": {
+      "beam_path": ["SC_SXR", "SC_SFTS", "SC_S2_X", "SC_STXI", "SC_TMO", "SC_HXR", "SC_BSYD", "SC_DASEL"],
+      "description": "bunch compressor #1",
+      "z_range": [119.419, 130.144],
+      "sector": "S01",
+      "beam_system": "superconducting",
+      "function": "bunch_compression",
+      "devices": {}
+    },
+    "COL1": {
+      "beam_path": ["SC_SXR", "SC_SFTS", "SC_S2_X", "SC_STXI", "SC_TMO", "SC_HXR", "SC_BSYD", "SC_DASEL"],
+      "description": "C1 collimation section",
+      "z_range": [130.144, 177.047],
+      "sector": "S01",
+      "beam_system": "superconducting",
+      "function": "collimation",
+      "devices": {}
+    },
+    "L2B": {
+      "beam_path": ["SC_SXR", "SC_SFTS", "SC_S2_X", "SC_STXI", "SC_TMO", "SC_HXR", "SC_BSYD", "SC_DASEL"],
+      "description": "L2B linac (MSC, standard end cap, cryomodules CM04-15, standard end cap, MSC)",
+      "z_range": [177.047, 329.605],
+      "sector": ["S01", "S02", "S03"],
+      "beam_system": "superconducting",
+      "function": "acceleration",
+      "devices": {}
+    },
+    "BC2B": {
+      "beam_path": ["SC_SXR", "SC_SFTS", "SC_S2_X", "SC_STXI", "SC_TMO", "SC_HXR", "SC_BSYD", "SC_DASEL"],
+      "description": "bunch compressor #2",
+      "z_range": [329.605, 358.038],
+      "sector": "S03",
+      "beam_system": "superconducting",
+      "function": "bunch_compression",
+      "devices": {}
+    },
+    "EMIT2": {
+      "beam_path": ["SC_SXR", "SC_SFTS", "SC_S2_X", "SC_STXI", "SC_TMO", "SC_HXR", "SC_BSYD", "SC_DASEL"],
+      "description": "post-BC2 emittance diagnostic section",
+      "z_range": [358.038, 388.210],
+      "sector": "S03",
+      "beam_system": "superconducting",
+      "function": "diagnostics",
+      "devices": {}
+    },
+    "L3B": {
+      "beam_path": ["SC_SXR", "SC_SFTS", "SC_S2_X", "SC_STXI", "SC_TMO", "SC_HXR", "SC_BSYD", "SC_DASEL"],
+      "description": "L3B linac (MSC, standard end cap, cryomodules CM16-25, vacuum break, cryomodules CM26-35, standard end cap, MSC)",
+      "z_range": [388.210, 641.196],
+      "sector": ["S03", "S04", "S05", "S06"],
+      "beam_system": "superconducting",
+      "function": "acceleration",
+      "devices": {}
+    },
+    "EXT": {
+      "beam_path": ["SC_SXR", "SC_SFTS", "SC_S2_X", "SC_STXI", "SC_TMO", "SC_HXR", "SC_BSYD", "SC_DASEL"],
+      "description": "linac extension",
+      "z_range": [641.196, 664.310],
+      "sector": "S06",
+      "beam_system": "superconducting",
+      "function": "transport",
+      "devices": {}
+    },
+    "DOG": {
+      "beam_path": ["SC_SXR", "SC_SFTS", "SC_S2_X", "SC_STXI", "SC_TMO", "SC_HXR", "SC_BSYD", "SC_DASEL"],
+      "description": "dogleg extraction line from linac axis to PEP-II e- bypass line",
+      "z_range": [664.310, 1202.631],
+      "sector": ["S06", "S07", "S08", "S09", "S10", "S11"],
+      "beam_system": "superconducting",
+      "function": "extraction",
+      "devices": {}
+    },
+    "BYP": {
+      "beam_path": ["SC_SXR", "SC_SFTS", "SC_S2_X", "SC_STXI", "SC_TMO", "SC_HXR", "SC_BSYD", "SC_DASEL"],
+      "description": "PEP-II e- bypass line, CX1/CY1 collimation system",
+      "z_range": [1202.631, 2780.276],
+      "sector": ["BPN11", "BPN12", "BPN13", "BPN14", "BPN15", "BPN16", "BPN17", "BPN18", "BPN19", "BPN20", "BPN21", "BPN22", "BPN23", "BPN24", "BPN25", "BPN26", "BPN27"],
+      "beam_system": "superconducting",
+      "function": "bypass_transport",
+      "devices": {}
+    },
+    "LTUS": {
+      "beam_path": ["SC_SXR", "SC_SFTS", "SC_S2_X", "SC_STXI", "SC_TMO", "CU_SXR"],
+      "description": "SXR horizontal dogleg, vertical bend, emittance diagnostics",
+      "z_range": [3224.022, 3565.656],
+      "sector": ["71S", "72S", "73S", "74S", "75S", "76S", "77S", "78S", "79S", "80S", "81S", "82S"],
+      "beam_system": "both",
+      "function": "transport_conditioning",
+      "devices": {}
+    },
+    "UNDS": {
+      "beam_path": ["SC_SXR", "SC_SFTS", "SC_S2_X", "SC_STXI", "SC_TMO", "CU_SXR"],
+      "description": "SXR extension + SXR undulator",
+      "z_range": [3565.656, 3718.483],
+      "sector": ["U01S", "U02S", "U03S", "U04S"],
+      "beam_system": "both",
+      "function": "x_ray_generation",
+      "devices": {}
     },
     "LTUH": {
-      "beam_path": "CU_HXR",
-      "description": "Hard X-ray undulator hall",
-      "z_range": [3200.0, 3700.0],
-      "sector": "LTUH",
+      "beam_path": ["SC_HXR", "CU_HXR", "CU_SFTH", "CU_HXTES", "CU_HTXI"],
+      "description": "HXR vertical bend, horizontal dogleg, emittance diagnostics",
+      "z_range": [3224.022, 3562.739],
+      "sector": ["71H", "72H", "73H", "74H", "75H", "76H", "77H", "78H", "79H", "80H", "81H", "82H"],
+      "beam_system": "both",
+      "function": "transport_conditioning",
       "devices": {
         "620": {
           "z_position": 3400.0,
@@ -40,27 +176,243 @@
         }
       }
     },
+    "UNDH": {
+      "beam_path": ["SC_HXR", "CU_HXR", "CU_SFTH", "CU_HXTES", "CU_HTXI"],
+      "description": "HXR undulator",
+      "z_range": [3562.739, 3718.483],
+      "sector": ["U01H", "U02H", "U03H", "U04H"],
+      "beam_system": "both",
+      "function": "x_ray_generation",
+      "devices": {}
+    },
+    "DMPH": {
+      "beam_path": ["SC_HXR", "CU_HXR"],
+      "description": "HXR post-undulator line",
+      "z_range": [3718.483, 3734.407],
+      "sector": "92H",
+      "beam_system": "both",
+      "function": "post_undulator",
+      "devices": {
+        "502": {
+          "z_position": 3718.483,
+          "z_uncertainty": 0.050
+        }
+      }
+    },
     "DMPS": {
-      "beam_path": "CU_HXR",
-      "description": "HXR dump line",
-      "z_range": [3750.0, 3800.0],
-      "sector": "DMPS",
+      "beam_path": ["SC_SXR", "CU_SXR"],
+      "description": "SXR post-undulator line + dump line",
+      "z_range": [3718.483, 3765.481],
+      "sector": "92S",
+      "beam_system": "both",
+      "function": "post_undulator",
       "devices": {
         "693": {
           "z_position": 3770.0,
           "z_uncertainty": 1.0
         }
       }
+    },
+    "GUN": {
+      "beam_path": ["CU_HXR", "CU_SFTH", "CU_HXTES", "CU_HTXI", "CU_SXR", "CU_ALINE", "CU_GSPEC", "CU_SPEC"],
+      "description": "gun, solenoid, diagnostics",
+      "z_range": [2017.911, 2018.712],
+      "sector": "S20",
+      "beam_system": "copper",
+      "function": "electron_source",
+      "devices": {}
+    },
+    "L0": {
+      "beam_path": ["CU_HXR", "CU_SFTH", "CU_HXTES", "CU_HTXI", "CU_SXR", "CU_ALINE", "CU_SPEC"],
+      "description": "L0 linac (L0A + L0B)",
+      "z_range": [2018.712, 2024.791],
+      "sector": "S20",
+      "beam_system": "copper",
+      "function": "acceleration",
+      "devices": {}
+    },
+    "L1": {
+      "beam_path": ["CU_HXR", "CU_SFTH", "CU_HXTES", "CU_HTXI", "CU_SXR", "CU_ALINE", "CU_SPEC"],
+      "description": "L1 linac (L1S)",
+      "z_range": [2035.035, 2044.167],
+      "sector": "S20",
+      "beam_system": "copper",
+      "function": "acceleration",
+      "devices": {}
+    },
+    "BC1": {
+      "beam_path": ["CU_HXR", "CU_SFTH", "CU_HXTES", "CU_HTXI", "CU_SXR", "CU_ALINE", "CU_SPEC"],
+      "description": "L1X + bunch compressor #1",
+      "z_range": [2044.167, 2059.733],
+      "sector": "S20",
+      "beam_system": "copper",
+      "function": "bunch_compression",
+      "devices": {}
+    },
+    "L2": {
+      "beam_path": ["CU_HXR", "CU_SFTH", "CU_HXTES", "CU_HTXI", "CU_SXR", "CU_ALINE", "CU_SPEC"],
+      "description": "L2 linac",
+      "z_range": [2059.733, 2410.698],
+      "sector": ["S20", "S21", "S22", "S23", "S24"],
+      "beam_system": "copper",
+      "function": "acceleration",
+      "devices": {}
+    },
+    "LI23": {
+      "beam_path": ["CU_HXR", "CU_SFTH", "CU_HXTES", "CU_HTXI", "CU_SXR", "CU_ALINE"],
+      "description": "Linac Sector 23",
+      "z_range": [2235.2, 2336.8],
+      "sector": "S23",
+      "beam_system": "copper",
+      "function": "acceleration",
+      "devices": {
+        "21": {
+          "z_position": 2350.0,
+          "z_uncertainty": 1.0
+        }
+      }
+    },
+    "BC2": {
+      "beam_path": ["CU_HXR", "CU_SFTH", "CU_HXTES", "CU_HTXI", "CU_SXR", "CU_ALINE"],
+      "description": "bunch compressor #2",
+      "z_range": [2410.698, 2438.400],
+      "sector": "S24",
+      "beam_system": "copper",
+      "function": "bunch_compression",
+      "devices": {}
+    },
+    "L3": {
+      "beam_path": ["CU_HXR", "CU_SFTH", "CU_HXTES", "CU_HTXI", "CU_SXR", "CU_ALINE"],
+      "description": "L3 linac",
+      "z_range": [2438.400, 3042.005],
+      "sector": ["S24", "S25", "S26", "S27", "S28", "S29", "S30"],
+      "beam_system": "copper",
+      "function": "acceleration",
+      "devices": {}
+    },
+    "BSY": {
+      "beam_path": ["SC_SXR", "SC_SFTS", "SC_S2_X", "SC_STXI", "SC_TMO", "SC_HXR", "SC_BSYD", "CU_HXR", "CU_SFTH", "CU_HXTES", "CU_HTXI", "CU_SXR", "CU_ALINE"],
+      "description": "Beam Switch Yard (BSY wood door to east face of muon wall)",
+      "z_range": [3050.512, 3224.022],
+      "sector": "BSY",
+      "beam_system": "both",
+      "function": "beam_distribution",
+      "devices": {}
     }
   },
   "beam_paths": {
-    "CU_HXR": {
-      "description": "Copper Hard X-ray line",
-      "sequence": ["LI20", "LI21", "LI22", "LI23", "LI24", "LTUH", "DMPH", "DMPS"]
-    },
     "SC_SXR": {
-      "description": "Superconducting Soft X-ray line", 
-      "sequence": ["SCRF", "LTUS", "DMPS"]
+      "description": "LCLS-II Superconducting Soft X-ray line",
+      "sequence": ["GUNB", "L0B", "HTR", "COL0", "L1B", "BC1B", "COL1", "L2B", "BC2B", "EMIT2", "L3B", "EXT", "DOG", "BYP", "LTUS", "UNDS", "DMPS"],
+      "beam_system": "superconducting",
+      "origin": "LCLS-II Sector 0 Gun (CW)",
+      "destination": "SXR e- dump"
+    },
+    "SC_HXR": {
+      "description": "LCLS-II Superconducting Hard X-ray line",
+      "sequence": ["GUNB", "L0B", "HTR", "COL0", "L1B", "BC1B", "COL1", "L2B", "BC2B", "EMIT2", "L3B", "EXT", "DOG", "BYP", "BSY", "LTUH", "UNDH", "DMPH"],
+      "beam_system": "superconducting",
+      "origin": "LCLS-II Sector 0 Gun (CW)",
+      "destination": "HXR e- dump"
+    },
+    "CU_HXR": {
+      "description": "LCLS Copper Hard X-ray line",
+      "sequence": ["GUN", "L0", "L1", "BC1", "L2", "BC2", "L3", "BSY", "LTUH", "UNDH", "DMPH"],
+      "beam_system": "copper",
+      "origin": "LCLS Sector 20 Gun (pulsed)",
+      "destination": "HXR e- dump"
+    },
+    "CU_SXR": {
+      "description": "LCLS Copper SXR line",
+      "sequence": ["GUN", "L0", "L1", "BC1", "L2", "BC2", "L3", "BSY", "LTUS", "UNDS", "DMPS"],
+      "beam_system": "copper",
+      "origin": "LCLS Sector 20 Gun (pulsed)",
+      "destination": "SXR e- dump"
     }
+  },
+  "parent_areas": {
+    "DL1": {
+      "description": "laser heater + diagnostics + reinjection into linac",
+      "children": ["DL1_1", "DL1_2"],
+      "z_range": [2024.791, 2035.035]
+    },
+    "DMPS": {
+      "description": "SXR post-undulator line + dump line",
+      "children": ["DMPS_1", "DMPS_2"],
+      "z_range": [3718.483, 3765.481]
+    },
+    "DMPH": {
+      "description": "HXR post-undulator line + dump line", 
+      "children": ["DMPH_1", "DMPH_2"],
+      "z_range": [3718.483, 3765.481]
+    }
+  },
+  "sectors": {
+    "S00": {"z_range": [-10.045, 0.000], "description": "original SLAC linac sector 0"},
+    "S01": {"z_range": [0.000, 101.6], "description": "original SLAC linac sector 1"},
+    "S02": {"z_range": [101.6, 203.2], "description": "original SLAC linac sector 2"},
+    "S03": {"z_range": [203.2, 304.8], "description": "original SLAC linac sector 3"},
+    "S04": {"z_range": [304.8, 406.4], "description": "original SLAC linac sector 4"},
+    "S05": {"z_range": [406.4, 508.0], "description": "original SLAC linac sector 5"},
+    "S06": {"z_range": [508.0, 609.6], "description": "original SLAC linac sector 6"},
+    "S07": {"z_range": [609.6, 711.2], "description": "original SLAC linac sector 7"},
+    "S08": {"z_range": [711.2, 812.8], "description": "original SLAC linac sector 8"},
+    "S09": {"z_range": [812.8, 914.4], "description": "original SLAC linac sector 9"},
+    "S10": {"z_range": [914.4, 1016.0], "description": "original SLAC linac sector 10"},
+    "S11": {"z_range": [1016.0, 1117.6], "description": "original SLAC linac sector 11"},
+    "S12": {"z_range": [1117.6, 1219.2], "description": "original SLAC linac sector 12"},
+    "S13": {"z_range": [1219.2, 1320.8], "description": "original SLAC linac sector 13"},
+    "S14": {"z_range": [1320.8, 1422.4], "description": "original SLAC linac sector 14"},
+    "S15": {"z_range": [1422.4, 1524.0], "description": "original SLAC linac sector 15"},
+    "S16": {"z_range": [1524.0, 1625.6], "description": "original SLAC linac sector 16"},
+    "S17": {"z_range": [1625.6, 1727.2], "description": "original SLAC linac sector 17"},
+    "S18": {"z_range": [1727.2, 1828.8], "description": "original SLAC linac sector 18"},
+    "S19": {"z_range": [1828.8, 1930.4], "description": "original SLAC linac sector 19"},
+    "S20": {"z_range": [1930.4, 2032.0], "description": "original SLAC linac sector 20"},
+    "S21": {"z_range": [2032.0, 2133.6], "description": "original SLAC linac sector 21"},
+    "S22": {"z_range": [2133.6, 2235.2], "description": "original SLAC linac sector 22"},
+    "S23": {"z_range": [2235.2, 2336.8], "description": "original SLAC linac sector 23"},
+    "S24": {"z_range": [2336.8, 2438.4], "description": "original SLAC linac sector 24"},
+    "S25": {"z_range": [2438.4, 2540.0], "description": "original SLAC linac sector 25"},
+    "S26": {"z_range": [2540.0, 2641.6], "description": "original SLAC linac sector 26"},
+    "S27": {"z_range": [2641.6, 2743.2], "description": "original SLAC linac sector 27"},
+    "S28": {"z_range": [2743.2, 2844.8], "description": "original SLAC linac sector 28"},
+    "S29": {"z_range": [2844.8, 2946.4], "description": "original SLAC linac sector 29"},
+    "S30": {"z_range": [2946.4, 3050.512], "description": "original SLAC linac sector 30"},
+    "BSY": {"z_range": [3050.512, 3224.022], "description": "Beam Switch Yard"},
+    "71S": {"z_range": [3224.022, 3254.268], "description": "LTUS section 71"},
+    "72S": {"z_range": [3254.268, 3280.228], "description": "LTUS section 72"},
+    "73S": {"z_range": [3280.228, 3307.814], "description": "LTUS section 73"},
+    "74S": {"z_range": [3307.814, 3338.348], "description": "LTUS section 74"},
+    "75S": {"z_range": [3338.348, 3365.548], "description": "LTUS section 75"},
+    "76S": {"z_range": [3365.548, 3393.128], "description": "LTUS section 76"},
+    "77S": {"z_range": [3393.128, 3416.220], "description": "LTUS section 77"},
+    "78S": {"z_range": [3416.220, 3445.245], "description": "LTUS section 78"},
+    "79S": {"z_range": [3445.245, 3475.691], "description": "LTUS section 79"},
+    "80S": {"z_range": [3475.691, 3502.548], "description": "LTUS section 80"},
+    "81S": {"z_range": [3502.548, 3531.808], "description": "LTUS section 81"},
+    "82S": {"z_range": [3531.808, 3565.656], "description": "LTUS section 82"},
+    "U01S": {"z_range": [3565.656, 3607.586], "description": "SXR undulator section 1"},
+    "U02S": {"z_range": [3607.586, 3642.786], "description": "SXR undulator section 2"},
+    "U03S": {"z_range": [3642.786, 3677.986], "description": "SXR undulator section 3"},
+    "U04S": {"z_range": [3677.986, 3718.483], "description": "SXR undulator section 4"},
+    "71H": {"z_range": [3224.022, 3251.530], "description": "LTUH section 71"},
+    "72H": {"z_range": [3251.530, 3279.279], "description": "LTUH section 72"},
+    "73H": {"z_range": [3279.279, 3308.480], "description": "LTUH section 73"},
+    "74H": {"z_range": [3308.480, 3334.760], "description": "LTUH section 74"},
+    "75H": {"z_range": [3334.760, 3362.530], "description": "LTUH section 75"},
+    "76H": {"z_range": [3362.530, 3390.270], "description": "LTUH section 76"},
+    "77H": {"z_range": [3390.270, 3419.420], "description": "LTUH section 77"},
+    "78H": {"z_range": [3419.420, 3445.760], "description": "LTUH section 78"},
+    "79H": {"z_range": [3445.760, 3473.530], "description": "LTUH section 79"},
+    "80H": {"z_range": [3473.530, 3501.280], "description": "LTUH section 80"},
+    "81H": {"z_range": [3501.280, 3529.030], "description": "LTUH section 81"},
+    "82H": {"z_range": [3529.030, 3562.739], "description": "LTUH section 82"},
+    "U01H": {"z_range": [3562.739, 3599.209], "description": "HXR undulator section 1"},
+    "U02H": {"z_range": [3599.209, 3635.323], "description": "HXR undulator section 2"},
+    "U03H": {"z_range": [3635.323, 3671.437], "description": "HXR undulator section 3"},
+    "U04H": {"z_range": [3671.437, 3718.483], "description": "HXR undulator section 4"},
+    "92H": {"z_range": [3718.483, 3765.481], "description": "DMPH (u/s face of BYDSH to HXR e- dump)"},
+    "92S": {"z_range": [3718.483, 3765.481], "description": "DMPS (u/s face of BYDSS to SXR e- dump)"}
   }
 }

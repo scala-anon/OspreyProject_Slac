@@ -43,12 +43,13 @@ endif()
 # HDF5 definition
 add_definitions(-DH5_BUILT_AS_DYNAMIC_LIB)
 
-# Core client library
+# Core client library - ADD ANNOTATION CLIENT
 add_library(dp_clients STATIC
     src/clients/ingest_client.cpp
     src/clients/query_client.cpp
     src/clients/archiver_client.cpp
     src/clients/spatial_analyzer.cpp
+    src/clients/annotation_client.cpp
     src/parsers/h5_parser.cpp
 )
 
@@ -68,22 +69,30 @@ target_link_libraries(dp_clients PRIVATE
     Threads::Threads
 )
 
-# Executables - only the 4 needed
+# Existing executables
 add_executable(h5_to_dp apps/h5_to_dp.cpp)
 target_link_libraries(h5_to_dp PRIVATE dp_clients)
-
-add_executable(query_pv apps/query_pv.cpp)
-target_link_libraries(query_pv PRIVATE dp_clients)
 
 add_executable(archiver_to_dp apps/archiver_to_dp.cpp)
 target_link_libraries(archiver_to_dp PRIVATE dp_clients)
 
-add_executable(query_state apps/query_state.cpp)
-target_link_libraries(query_state PRIVATE dp_clients)
+add_executable(query_data apps/query_data.cpp)
+target_link_libraries(query_data PRIVATE dp_clients)
 
-# Install targets
-install(TARGETS h5_to_dp query_pv archiver_to_dp query_state
+add_executable(query_metadata apps/query_metadata.cpp)
+target_link_libraries(query_metadata PRIVATE dp_clients)
+
+add_executable(create_dataset apps/create_dataset.cpp)
+target_link_libraries(create_dataset PRIVATE dp_clients)
+
+add_executable(manage_annotations apps/manage_annotations.cpp)
+target_link_libraries(manage_annotations PRIVATE dp_clients)
+
+install(TARGETS h5_to_dp archiver_to_dp query_data
     RUNTIME DESTINATION bin)
+
+ install(TARGETS query_metadata create_dataset manage_annotations
+     RUNTIME DESTINATION bin)
 
 install(TARGETS dp_clients
     ARCHIVE DESTINATION lib)

@@ -76,11 +76,14 @@ target_link_libraries(h5_to_dp PRIVATE dp_clients)
 add_executable(archiver_to_dp apps/archiver_to_dp.cpp)
 target_link_libraries(archiver_to_dp PRIVATE dp_clients)
 
-add_executable(query_data apps/query_data.cpp)
-target_link_libraries(query_data PRIVATE dp_clients)
+add_executable(query_mongo apps/query_mongo.cpp)
+target_link_libraries(query_mongo PRIVATE dp_clients)
 
-add_executable(query_metadata apps/query_metadata.cpp)
-target_link_libraries(query_metadata PRIVATE dp_clients)
+#add_executable(query_data apps/query_data.cpp)
+#target_link_libraries(query_data PRIVATE dp_clients)
+
+#add_executable(query_metadata apps/query_metadata.cpp)
+#target_link_libraries(query_metadata PRIVATE dp_clients)
 
 add_executable(create_dataset apps/create_dataset.cpp)
 target_link_libraries(create_dataset PRIVATE dp_clients)
@@ -88,10 +91,13 @@ target_link_libraries(create_dataset PRIVATE dp_clients)
 add_executable(manage_annotations apps/manage_annotations.cpp)
 target_link_libraries(manage_annotations PRIVATE dp_clients)
 
-install(TARGETS h5_to_dp archiver_to_dp query_data 
+add_executable(cli apps/cli.cpp)
+target_link_libraries(cli PRIVATE dp_clients)
+
+install(TARGETS h5_to_dp archiver_to_dp query_mongo
     RUNTIME DESTINATION bin)
 
- install(TARGETS query_metadata create_dataset manage_annotations
+ install(TARGETS create_dataset manage_annotations cli
      RUNTIME DESTINATION bin)
 
 install(TARGETS dp_clients

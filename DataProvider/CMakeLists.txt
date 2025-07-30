@@ -88,7 +88,7 @@ target_link_libraries(create_dataset PRIVATE dp_clients)
 add_executable(manage_annotations apps/manage_annotations.cpp)
 target_link_libraries(manage_annotations PRIVATE dp_clients)
 
-install(TARGETS h5_to_dp archiver_to_dp query_data
+install(TARGETS h5_to_dp archiver_to_dp query_data 
     RUNTIME DESTINATION bin)
 
  install(TARGETS query_metadata create_dataset manage_annotations

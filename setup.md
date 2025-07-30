@@ -143,3 +143,37 @@ data-platform/bin/mongodb-docker-create
 #### run mongosh against mongodb docker container
 ```
 data-platform/bin/mongodb-docker-shell
+
+### run data platform services
+
+Use the following commands to start the standard Ingestion and Query Services.
+
+#### start ingestion service
+```
+data-platform/bin/server-ingest-start
+```
+
+#### check ingestion service status
+```
+data-platform/bin/server-ingest-status
+```
+
+#### start query service
+```
+data-platform/bin/server-query-start
+```
+
+#### check query service status
+```
+data-platform/bin/server-query-status
+```
+
+#### start annotation service
+```
+data-platform/bin/server-annotation-start
+```
+
+#### check annotation service status
+```
+data-platform/bin/server-annotation-status
+```

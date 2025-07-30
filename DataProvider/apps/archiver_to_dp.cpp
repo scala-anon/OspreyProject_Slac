@@ -14,31 +14,25 @@ std::vector<SignalData> convertArchiverToSignalData(const ArchiverResponse &arch
     }
 
     SignalData signal;
-
-    std::string pv_name = archiver_response.metadata.name;
+    const std::string &pv_name = archiver_response.metadata.name;
     signal.info.full_name = pv_name;
 
+    // Parse PV name into components
     std::vector<std::string> parts;
-    std::stringstream ss(pv_name);
+    std::istringstream ss(pv_name);
     std::string part;
     while (std::getline(ss, part, ':')) {
         parts.push_back(part);
     }
 
-    if (parts.size() >= 3) {
-        signal.info.device = parts[0];
-        signal.info.device_area = parts[1];
-        signal.info.device_location = parts[2];
-        if (parts.size() > 3) {
-            signal.info.device_attribute = parts[3];
-        }
-    } else {
-        signal.info.device = "UNKNOWN";
-        signal.info.device_area = "UNKNOWN";
-        signal.info.device_location = "UNKNOWN";
-        signal.info.device_attribute = "UNKNOWN";
-    }
+    // Set device info with defaults
+    const std::string unknown = "UNKNOWN";
+    signal.info.device = parts.size() > 0 ? parts[0] : unknown;
+    signal.info.device_area = parts.size() > 1 ? parts[1] : unknown;
+    signal.info.device_location = parts.size() > 2 ? parts[2] : unknown;
+    signal.info.device_attribute = parts.size() > 3 ? parts[3] : unknown;
 
+    // Determine signal type
     if (!archiver_response.metadata.enums.empty()) {
         signal.info.signal_type = "enum";
     } else if (signal.info.device == "IOC") {
@@ -49,40 +43,45 @@ std::vector<SignalData> convertArchiverToSignalData(const ArchiverResponse &arch
         signal.info.signal_type = "scalar";
     }
 
-    signal.info.units = archiver_response.metadata.properties.count("EGU") ? 
-                       archiver_response.metadata.properties.at("EGU") : "";
+    // Set units
+    auto egu_it = archiver_response.metadata.properties.find("EGU");
+    signal.info.units = (egu_it != archiver_response.metadata.properties.end()) ? egu_it->second : "";
 
+    // Initialize timestamp data
+    const auto &data_points = archiver_response.data_points;
     signal.timestamps = std::make_shared<TimestampData>();
-    signal.timestamps->count = archiver_response.data_points.size();
+    signal.timestamps->count = data_points.size();
     signal.timestamps->is_regular_sampling = false;
 
-    if (!archiver_response.data_points.empty()) {
-        const auto &first_point = archiver_response.data_points.front();
-        const auto &last_point = archiver_response.data_points.back();
+    if (!data_points.empty()) {
+        const auto &first = data_points.front();
+        const auto &last = data_points.back();
 
-        signal.timestamps->start_time_sec = first_point.secs;
-        signal.timestamps->start_time_nano = first_point.nanos;
-        signal.timestamps->end_time_sec = last_point.secs;
-        signal.timestamps->end_time_nano = last_point.nanos;
+        signal.timestamps->start_time_sec = first.secs;
+        signal.timestamps->start_time_nano = first.nanos;
+        signal.timestamps->end_time_sec = last.secs;
+        signal.timestamps->end_time_nano = last.nanos;
 
-        if (archiver_response.data_points.size() > 1) {
-            uint64_t total_time_ns = (last_point.secs - first_point.secs) * 1000000000ULL +
-                                     (last_point.nanos - first_point.nanos);
-            signal.timestamps->period_nanos = total_time_ns / (archiver_response.data_points.size() - 1);
+        // Calculate period
+        if (data_points.size() > 1) {
+            uint64_t total_time_ns = (last.secs - first.secs) * 1000000000ULL + (last.nanos - first.nanos);
+            signal.timestamps->period_nanos = total_time_ns / (data_points.size() - 1);
         } else {
             signal.timestamps->period_nanos = 1000000000;
         }
     }
 
-    signal.values.reserve(archiver_response.data_points.size());
-    for (const auto &point : archiver_response.data_points) {
-        if (ArchiverUtils::isValidEpicsValue(point.value, point.severity, point.status)) {
-            signal.values.push_back(point.value);
-        } else {
-            signal.values.push_back(std::numeric_limits<double>::quiet_NaN());
-        }
+    // Convert values
+    signal.values.reserve(data_points.size());
+    for (const auto &point : data_points) {
+        signal.values.push_back(
+            ArchiverUtils::isValidEpicsValue(point.value, point.severity, point.status) 
+                ? point.value 
+                : std::numeric_limits<double>::quiet_NaN()
+        );
     }
 
+    // Set file metadata
     signal.file_metadata.origin = "ARCHIVER";
     signal.file_metadata.project = "epics_archive";
     signal.file_metadata.pathway = "lcls-archapp.slac.stanford.edu";
@@ -96,21 +95,13 @@ IngestDataRequest createArchiverIngestRequest(const SignalData &signal,
                                               const std::string &providerId,
                                               const std::string &requestId) {
 
-    SamplingClock sampling_clock;
-    if (signal.timestamps->count > 1) {
-        sampling_clock = makeSamplingClock(
-            signal.timestamps->start_time_sec,
-            signal.timestamps->start_time_nano,
-            signal.timestamps->period_nanos,
-            static_cast<uint32_t>(signal.timestamps->count));
-    } else {
-        sampling_clock = makeSamplingClock(
-            signal.timestamps->start_time_sec,
-            signal.timestamps->start_time_nano,
-            1000000000,
-            1);
-    }
+    // Create sampling clock
+    SamplingClock sampling_clock = (signal.timestamps->count > 1) ?
+        makeSamplingClock(signal.timestamps->start_time_sec, signal.timestamps->start_time_nano,
+                         signal.timestamps->period_nanos, static_cast<uint32_t>(signal.timestamps->count)) :
+        makeSamplingClock(signal.timestamps->start_time_sec, signal.timestamps->start_time_nano, 1000000000, 1);
 
+    // Create data values
     std::vector<DataValue> data_values;
     data_values.reserve(signal.values.size());
     for (double value : signal.values) {
@@ -119,17 +110,28 @@ IngestDataRequest createArchiverIngestRequest(const SignalData &signal,
 
     auto data_column = makeDataColumn(signal.info.full_name, data_values);
 
+    // Create attributes - consolidated approach
     std::vector<Attribute> attributes;
-    attributes.push_back(makeAttribute("device", signal.info.device));
-    attributes.push_back(makeAttribute("device_area", signal.info.device_area));
-    attributes.push_back(makeAttribute("device_location", signal.info.device_location));
-    attributes.push_back(makeAttribute("device_attribute", signal.info.device_attribute));
-    attributes.push_back(makeAttribute("signal_type", signal.info.signal_type));
-    attributes.push_back(makeAttribute("units", signal.info.units));
-    attributes.push_back(makeAttribute("origin", signal.file_metadata.origin));
-    attributes.push_back(makeAttribute("project", signal.file_metadata.project));
-    attributes.push_back(makeAttribute("data_source", "archiver"));
+    attributes.reserve(20); 
 
+    // Core signal attributes
+    const std::vector<std::pair<std::string, std::string>> core_attrs = {
+        {"device", signal.info.device},
+        {"device_area", signal.info.device_area},
+        {"device_location", signal.info.device_location},
+        {"device_attribute", signal.info.device_attribute},
+        {"signal_type", signal.info.signal_type},
+        {"units", signal.info.units},
+        {"origin", signal.file_metadata.origin},
+        {"project", signal.file_metadata.project},
+        {"data_source", "archiver"}
+    };
+
+    for (const auto &[key, value] : core_attrs) {
+        attributes.push_back(makeAttribute(key, value));
+    }
+
+    // Add EPICS metadata
     for (const auto &[key, value] : archiver_response.metadata.properties) {
         std::string attr_key = "epics_" + key;
         std::transform(attr_key.begin(), attr_key.end(), attr_key.begin(), ::tolower);
@@ -137,16 +139,15 @@ IngestDataRequest createArchiverIngestRequest(const SignalData &signal,
     }
 
     for (const auto &[key, value] : archiver_response.metadata.enums) {
-        std::string attr_key = "epics_enum_" + key;
-        attributes.push_back(makeAttribute(attr_key, value));
+        attributes.push_back(makeAttribute("epics_enum_" + key, value));
     }
 
     if (!archiver_response.metadata.description.empty()) {
         attributes.push_back(makeAttribute("epics_description", archiver_response.metadata.description));
     }
 
-    size_t valid_count = 0;
-    size_t alarm_count = 0;
+    // Calculate statistics
+    size_t valid_count = 0, alarm_count = 0;
     for (const auto &point : archiver_response.data_points) {
         if (ArchiverUtils::isValidEpicsValue(point.value, point.severity, point.status)) {
             valid_count++;
@@ -156,116 +157,121 @@ IngestDataRequest createArchiverIngestRequest(const SignalData &signal,
         }
     }
 
-    double valid_percentage = signal.values.empty() ? 0.0 : (double)valid_count / signal.values.size() * 100.0;
+    double valid_percentage = signal.values.empty() ? 0.0 : 
+        static_cast<double>(valid_count) / signal.values.size() * 100.0;
 
-    attributes.push_back(makeAttribute("data_valid_count", std::to_string(valid_count)));
-    attributes.push_back(makeAttribute("data_total_count", std::to_string(signal.values.size())));
-    attributes.push_back(makeAttribute("data_valid_percentage", std::to_string(valid_percentage)));
-    attributes.push_back(makeAttribute("data_alarm_count", std::to_string(alarm_count)));
-    attributes.push_back(makeAttribute("has_enums", archiver_response.metadata.enums.empty() ? "false" : "true"));
+    // Add statistics attributes
+    const std::vector<std::pair<std::string, std::string>> stats_attrs = {
+        {"data_valid_count", std::to_string(valid_count)},
+        {"data_total_count", std::to_string(signal.values.size())},
+        {"data_valid_percentage", std::to_string(valid_percentage)},
+        {"data_alarm_count", std::to_string(alarm_count)},
+        {"has_enums", archiver_response.metadata.enums.empty() ? "false" : "true"}
+    };
 
-    std::vector<std::string> tags;
-    tags.push_back("archiver_data");
-    tags.push_back("epics_data");
-    tags.push_back("device_" + signal.info.device);
-    tags.push_back("project_" + signal.file_metadata.project);
+    for (const auto &[key, value] : stats_attrs) {
+        attributes.push_back(makeAttribute(key, value));
+    }
 
-    if (!archiver_response.metadata.enums.empty()) {
-        tags.push_back("has_enums");
-    }
-    if (alarm_count > 0) {
-        tags.push_back("has_alarms");
-    }
-    if (valid_percentage > 90.0) {
-        tags.push_back("high_quality_data");
-    } else if (valid_percentage < 10.0) {
-        tags.push_back("low_quality_data");
-    }
+    // Create tags
+    std::vector<std::string> tags = {
+        "archiver_data", "epics_data", 
+        "device_" + signal.info.device, 
+        "project_" + signal.file_metadata.project
+    };
+
+    if (!archiver_response.metadata.enums.empty()) tags.push_back("has_enums");
+    if (alarm_count > 0) tags.push_back("has_alarms");
+    if (valid_percentage > 90.0) tags.push_back("high_quality_data");
+    else if (valid_percentage < 10.0) tags.push_back("low_quality_data");
 
     auto event_metadata = makeEventMetadata(
         "EPICS Archiver Data: " + signal.info.full_name,
-        signal.timestamps->start_time_sec,
-        signal.timestamps->start_time_nano,
-        signal.timestamps->end_time_sec,
-        signal.timestamps->end_time_nano);
+        signal.timestamps->start_time_sec, signal.timestamps->start_time_nano,
+        signal.timestamps->end_time_sec, signal.timestamps->end_time_nano);
 
-    return makeIngestDataRequest(
-        providerId,
-        requestId,
-        attributes,
-        tags,
-        event_metadata,
-        sampling_clock,
-        {data_column});
+    return makeIngestDataRequest(providerId, requestId, attributes, tags, 
+                               event_metadata, sampling_clock, {data_column});
 }
 
-void printUsage(const std::string &program_name) {
-    std::cout << "EPICS Archiver to DataProvider Ingestion\n";
-    std::cout << "USAGE: " << program_name << " [OPTIONS]\n\n";
-    std::cout << "OPTIONS:\n";
-    std::cout << "  --pv=NAME                     Query single PV\n";
-    std::cout << "  --pvs=NAME1,NAME2,...         Query multiple PVs (comma-separated)\n";
-    std::cout << "  --date=MM-DD-YYYY             Date to query (default: today)\n";
-    std::cout << "  --hours=N                     Hours from date (default: 24)\n";
-    std::cout << "  --local-only                  Parse only, don't send to server\n";
-    std::cout << "  --server=ADDRESS              Server address\n";
-    std::cout << "  --config=PATH                 Config file path\n\n";
+// Date conversion function for DDMMYYYY format
+std::string convertDateFormat(const std::string& ddmmyyyy) {
+    if (ddmmyyyy.length() != 8) return "";
+    
+    std::string dd = ddmmyyyy.substr(0, 2);
+    std::string mm = ddmmyyyy.substr(2, 2);
+    std::string yyyy = ddmmyyyy.substr(4, 4);
+    
+    return mm + "-" + dd + "-" + yyyy;
 }
 
-int main(int argc, char *argv[]) {
-    if (argc < 2) {
-        printUsage(argv[0]);
-        return 1;
-    }
-
-    std::string single_pv, date_str, config_path = "config/ingestion_config.json";
+struct ProgramArgs {
+    std::string single_pv;
     std::vector<std::string> multiple_pvs;
+    std::string date_str;
+    std::string config_path = "config/ingestion_config.json";
+    std::string server_address;
     int hours = 24;
     bool local_only = false;
-    std::string server_address;
+};
 
-    // Parse arguments
+ProgramArgs parseArguments(int argc, char *argv[]) {
+    ProgramArgs args;
+    
     for (int i = 1; i < argc; i++) {
         std::string arg = argv[i];
 
         if (arg.find("--pv=") == 0) {
-            single_pv = arg.substr(5);
+            args.single_pv = arg.substr(5);
         } else if (arg.find("--pvs=") == 0) {
-            std::stringstream ss(arg.substr(6));
+            std::istringstream ss(arg.substr(6));
             std::string pv;
             while (std::getline(ss, pv, ',')) {
-                multiple_pvs.push_back(pv);
+                args.multiple_pvs.push_back(pv);
             }
         } else if (arg.find("--date=") == 0) {
-            date_str = arg.substr(7);
+            std::string input_date = arg.substr(7);
+            // Handle both DDMMYYYY and MM-DD-YYYY formats
+            if (input_date.length() == 8 && input_date.find('-') == std::string::npos) {
+                args.date_str = convertDateFormat(input_date);
+            } else {
+                args.date_str = input_date;
+            }
         } else if (arg.find("--hours=") == 0) {
-            hours = std::stoi(arg.substr(8));
+            args.hours = std::stoi(arg.substr(8));
         } else if (arg == "--local-only") {
-            local_only = true;
+            args.local_only = true;
         } else if (arg.find("--server=") == 0) {
-            server_address = arg.substr(9);
+            args.server_address = arg.substr(9);
         } else if (arg.find("--config=") == 0) {
-            config_path = arg.substr(9);
+            args.config_path = arg.substr(9);
         }
     }
 
-    // Default to today if no date specified
-    if (date_str.empty()) {
+    // Set default date if empty
+    if (args.date_str.empty()) {
         auto now = std::time(nullptr);
         auto tm = *std::localtime(&now);
         std::ostringstream oss;
         oss << std::put_time(&tm, "%m-%d-%Y");
-        date_str = oss.str();
+        args.date_str = oss.str();
     }
+
+    return args;
+}
+
+int main(int argc, char *argv[]) {
+    if (argc < 2) return 1;
+
+    auto args = parseArguments(argc, argv);
 
     // Determine PVs to query
     std::vector<std::string> pv_names;
-    if (!single_pv.empty()) {
-        pv_names.push_back(single_pv);
-    } else if (!multiple_pvs.empty()) {
-        pv_names = multiple_pvs;
+    if (!args.single_pv.empty()) {
+        pv_names.push_back(args.single_pv);
+    } else if (!args.multiple_pvs.empty()) {
+        pv_names = std::move(args.multiple_pvs);
     } else {
-        std::cerr << "Must specify --pv or --pvs" << std::endl;
         return 1;
     }
 
@@ -276,49 +282,45 @@ int main(int argc, char *argv[]) {
 
         // Query archiver for each PV
         for (const auto &pv_name : pv_names) {
-            auto response = archiver_client.queryPvByDate(pv_name, date_str, hours);
+            auto response = archiver_client.queryPvByDate(pv_name, args.date_str, args.hours);
 
             if (!response.success) {
-                std::cerr << "Failed to query " << pv_name << ": " << response.error_message << std::endl;
                 continue;
             }
 
             archiver_responses.push_back(response);
-
             auto signals = convertArchiverToSignalData(response);
             all_signals.insert(all_signals.end(), signals.begin(), signals.end());
         }
 
         if (all_signals.empty()) {
-            std::cerr << "No valid signals to process" << std::endl;
             return 1;
         }
 
-        std::cout << "Processed " << all_signals.size() << " signals from archiver" << std::endl;
-
-        if (local_only) {
-            std::cout << "Local processing complete" << std::endl;
+        if (args.local_only) {
             return 0;
         }
 
+        // Initialize client configuration
         IngestClientConfig client_config;
         try {
-            client_config = IngestClientConfig::fromConfigFile(config_path);
+            client_config = IngestClientConfig::fromConfigFile(args.config_path);
         } catch (const std::exception&) {
             // Use default config
         }
 
-        if (!server_address.empty()) {
-            client_config.server_address = server_address;
+        if (!args.server_address.empty()) {
+            client_config.server_address = args.server_address;
         }
 
         IngestClient client(client_config);
 
         // Register provider
-        std::vector<Attribute> provider_attributes;
-        provider_attributes.push_back(makeAttribute("facility", "SLAC"));
-        provider_attributes.push_back(makeAttribute("data_source", "epics_archiver"));
-        provider_attributes.push_back(makeAttribute("signal_count", std::to_string(all_signals.size())));
+        std::vector<Attribute> provider_attributes = {
+            makeAttribute("facility", "SLAC"),
+            makeAttribute("data_source", "epics_archiver"),
+            makeAttribute("signal_count", std::to_string(all_signals.size()))
+        };
 
         std::vector<std::string> provider_tags = {"epics", "archiver", "slac"};
 
@@ -331,11 +333,8 @@ int main(int argc, char *argv[]) {
         }
 
         if (providerId.empty()) {
-            std::cerr << "Failed to get provider ID from registration response" << std::endl;
             return 1;
         }
-
-        std::cout << "Registered as provider: " << providerId << std::endl;
 
         // Create ingestion requests
         std::vector<IngestDataRequest> requests;
@@ -343,33 +342,15 @@ int main(int argc, char *argv[]) {
 
         for (size_t i = 0; i < all_signals.size(); ++i) {
             std::string requestId = IngestUtils::generateRequestId("archiver_signal_" + std::to_string(i));
-            auto request = createArchiverIngestRequest(all_signals[i], archiver_responses[i],
-                                                       providerId, requestId);
-            requests.push_back(std::move(request));
+            requests.push_back(createArchiverIngestRequest(all_signals[i], archiver_responses[i],
+                                                         providerId, requestId));
         }
 
-        // Fixed: Use ingestBatch instead of ingestWithSpatialEnrichment
-        std::cout << "Starting ingestion..." << std::endl;
-        auto start_time = std::chrono::high_resolution_clock::now();
-
+        // Perform ingestion
         IngestionResult result = client.ingestBatch(requests, providerId);
-
-        auto end_time = std::chrono::high_resolution_clock::now();
-        auto total_time = std::chrono::duration<double>(end_time - start_time);
-
-        std::cout << "Ingestion complete:" << std::endl;
-        std::cout << "  Processed: " << result.successful_requests << "/" << result.total_requests << std::endl;
-        std::cout << "  Success rate: " << std::fixed << std::setprecision(1)
-                  << (result.getSuccessRate() * 100.0) << "%" << std::endl;
-        std::cout << "  Time: " << std::setprecision(1) << total_time.count() << "s" << std::endl;
-
-        if (result.failed_requests > 0) {
-            std::cout << "  Failed: " << result.failed_requests << " requests" << std::endl;
-        }
 
         return result.success ? 0 : 1;
     } catch (const std::exception &e) {
-        std::cerr << "Error: " << e.what() << std::endl;
         return 1;
     }
 }

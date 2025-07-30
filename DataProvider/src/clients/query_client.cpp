@@ -233,7 +233,6 @@ std::vector<QueryDataResponse> QueryClient::queryDataStream(const QueryDataReque
         throw std::runtime_error(error);
     }
 
-    std::cout << "QueryDataStream Success: received " << responses.size() << " responses" << std::endl;
     return responses;
 }
 
@@ -461,7 +460,6 @@ SpatialQueryEngine::SpatialQueryEngine(const std::string& dictionaries_path)
 bool SpatialQueryEngine::loadDictionaries() {
     // Stub implementation - would load actual dictionary files
     dictionaries_loaded_ = true;
-    std::cout << "Spatial query dictionaries loaded from: " << dictionaries_path_ << std::endl;
     return true;
 }
 

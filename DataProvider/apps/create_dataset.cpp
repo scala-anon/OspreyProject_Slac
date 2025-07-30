@@ -51,23 +51,23 @@ std::vector<std::string> splitString(const std::string& str, char delimiter) {
 }
 
 void printDataSet(const DataSet& dataset, bool verbose) {
-    std::cout << "Dataset ID: " << dataset.id() << std::endl;
-    std::cout << "Name: " << dataset.name() << std::endl;
-    std::cout << "Owner: " << dataset.ownerid() << std::endl;
+    std::cout << "Dataset ID: " << dataset.id() << "\n"
+              << "Name: " << dataset.name() << "\n"
+              << "Owner: " << dataset.ownerid() << "\n";
     
     if (!dataset.description().empty()) {
-        std::cout << "Description: " << dataset.description() << std::endl;
+        std::cout << "Description: " << dataset.description() << "\n";
     }
     
-    std::cout << "Data Blocks: " << dataset.datablocks_size() << std::endl;
+    std::cout << "Data Blocks: " << dataset.datablocks_size() << "\n";
     
     if (verbose) {
         for (int i = 0; i < dataset.datablocks_size(); i++) {
             const auto& block = dataset.datablocks(i);
-            std::cout << "  Block " << (i + 1) << ":\n";
-            std::cout << "    Start: " << block.begintime().epochseconds() << std::endl;
-            std::cout << "    End: " << block.endtime().epochseconds() << std::endl;
-            std::cout << "    PV Count: " << block.pvnames_size() << std::endl;
+            std::cout << "  Block " << (i + 1) << ":\n"
+                      << "    Start: " << block.begintime().epochseconds() << "\n"
+                      << "    End: " << block.endtime().epochseconds() << "\n"
+                      << "    PV Count: " << block.pvnames_size() << "\n";
             
             if (block.pvnames_size() <= 10) {
                 std::cout << "    PVs: ";
@@ -75,17 +75,17 @@ void printDataSet(const DataSet& dataset, bool verbose) {
                     if (j > 0) std::cout << ", ";
                     std::cout << block.pvnames(j);
                 }
-                std::cout << std::endl;
+                std::cout << "\n";
             } else {
                 std::cout << "    PVs: " << block.pvnames(0) << ", " << block.pvnames(1) 
-                          << ", ... (+" << (block.pvnames_size() - 2) << " more)" << std::endl;
+                          << ", ... (+" << (block.pvnames_size() - 2) << " more)\n";
             }
         }
     }
-    std::cout << std::endl;
+    std::cout << "\n";
 }
 
-int main(int argc, char* argv[]) {
+struct ProgramArgs {
     std::string server_address = "localhost:50051";
     bool create_mode = false;
     bool query_mode = false;
@@ -98,148 +98,170 @@ int main(int argc, char* argv[]) {
     
     // Query parameters
     std::string query_owner, query_text, query_pv, query_id;
+};
+
+ProgramArgs parseArguments(int argc, char* argv[]) {
+    ProgramArgs args;
     
-    // Parse arguments
     for (int i = 1; i < argc; i++) {
         std::string arg = argv[i];
         
         if (arg == "--help" || arg == "-h") {
             printUsage(argv[0]);
-            return 0;
+            exit(0);
         }
         else if (arg.find("--server=") == 0) {
-            server_address = arg.substr(9);
+            args.server_address = arg.substr(9);
         }
         else if (arg == "--create") {
-            create_mode = true;
+            args.create_mode = true;
         }
         else if (arg == "--query") {
-            query_mode = true;
+            args.query_mode = true;
         }
         else if (arg.find("--name=") == 0) {
-            dataset_name = arg.substr(7);
+            args.dataset_name = arg.substr(7);
         }
         else if (arg.find("--owner=") == 0) {
-            if (create_mode) {
-                owner_id = arg.substr(8);
+            if (args.create_mode) {
+                args.owner_id = arg.substr(8);
             } else {
-                query_owner = arg.substr(8);
+                args.query_owner = arg.substr(8);
             }
         }
         else if (arg.find("--desc=") == 0) {
-            description = arg.substr(7);
+            args.description = arg.substr(7);
         }
         else if (arg.find("--pvs=") == 0) {
-            pv_names = splitString(arg.substr(6), ',');
+            args.pv_names = splitString(arg.substr(6), ',');
         }
         else if (arg.find("--start=") == 0) {
-            start_time = std::stoull(arg.substr(8));
+            args.start_time = std::stoull(arg.substr(8));
         }
         else if (arg.find("--end=") == 0) {
-            end_time = std::stoull(arg.substr(6));
+            args.end_time = std::stoull(arg.substr(6));
         }
         else if (arg.find("--text=") == 0) {
-            query_text = arg.substr(7);
+            args.query_text = arg.substr(7);
         }
         else if (arg.find("--pv=") == 0) {
-            query_pv = arg.substr(5);
+            args.query_pv = arg.substr(5);
         }
         else if (arg.find("--id=") == 0) {
-            query_id = arg.substr(5);
+            args.query_id = arg.substr(5);
         }
         else if (arg == "--verbose" || arg == "-v") {
-            verbose = true;
+            args.verbose = true;
         }
         else {
             std::cerr << "Unknown argument: " << arg << std::endl;
-            return 1;
+            exit(1);
         }
     }
     
-    if (!create_mode && !query_mode) {
+    return args;
+}
+
+bool validateCreateArgs(const ProgramArgs& args) {
+    if (args.dataset_name.empty() || args.owner_id.empty() || args.pv_names.empty() || 
+        args.start_time == 0 || args.end_time == 0) {
+        std::cerr << "Error: Missing required parameters for dataset creation\n"
+                  << "Required: --name, --owner, --pvs, --start, --end\n";
+        return false;
+    }
+    
+    if (args.start_time >= args.end_time) {
+        std::cerr << "Error: Start time must be before end time\n";
+        return false;
+    }
+    
+    return true;
+}
+
+void performCreateDataset(AnnotationClient& client, const ProgramArgs& args) {
+    std::cout << "Creating dataset '" << args.dataset_name << "'...\n"
+              << "Owner: " << args.owner_id << "\n"
+              << "PVs: " << args.pv_names.size() << "\n"
+              << "Time range: " << args.start_time << " to " << args.end_time 
+              << " (" << (args.end_time - args.start_time) << " seconds)\n";
+    
+    // Create the dataset
+    TimeRange time_range(args.start_time, 0, args.end_time, 0);
+    DataBlock block = makeDataBlock(time_range, args.pv_names);
+    DataSet dataset = makeDataSet(args.dataset_name, args.owner_id, args.description, {block});
+    
+    auto response = client.createDataSet(makeCreateDataSetRequest(dataset));
+    
+    if (response.has_createdatasetresult()) {
+        std::cout << "\nDataset created successfully!\n"
+                  << "Dataset ID: " << response.createdatasetresult().datasetid() << std::endl;
+    } else {
+        std::cout << "Dataset creation failed\n";
+        if (response.has_exceptionalresult()) {
+            std::cout << "Error details available in response\n";
+        }
+        exit(1);
+    }
+}
+
+void performQueryDatasets(AnnotationClient& client, const ProgramArgs& args) {
+    QueryDataSetsRequest request;
+    
+    // Build query based on parameters
+    if (!args.query_id.empty()) {
+        request = makeQueryDataSetsById(args.query_id);
+    } else if (!args.query_owner.empty()) {
+        request = makeQueryDataSetsByOwner(args.query_owner);
+    } else if (!args.query_text.empty()) {
+        request = makeQueryDataSetsByText(args.query_text);
+    } else if (!args.query_pv.empty()) {
+        request = makeQueryDataSetsByPvName(args.query_pv);
+    } else {
+        // Query all datasets (empty text search)
+        request = makeQueryDataSetsByText("");
+    }
+    
+    auto response = client.queryDataSets(request);
+    
+    if (response.has_datasetsresult()) {
+        const auto& result = response.datasetsresult();
+        std::cout << "Found " << result.datasets_size() << " dataset(s):\n\n";
+        
+        for (const auto& dataset : result.datasets()) {
+            printDataSet(dataset, args.verbose);
+        }
+    } else {
+        std::cout << "No datasets found\n";
+        if (response.has_exceptionalresult()) {
+            std::cout << "Query returned exceptional result\n";
+        }
+    }
+}
+
+int main(int argc, char* argv[]) {
+    auto args = parseArguments(argc, argv);
+    
+    if (!args.create_mode && !args.query_mode) {
         std::cerr << "Error: Must specify either --create or --query\n";
         printUsage(argv[0]);
         return 1;
     }
     
-    if (create_mode && query_mode) {
+    if (args.create_mode && args.query_mode) {
         std::cerr << "Error: Cannot specify both --create and --query\n";
         return 1;
     }
     
     try {
-        AnnotationClient client(server_address);
+        AnnotationClient client(args.server_address);
         
-        if (create_mode) {
-            // Validate required parameters
-            if (dataset_name.empty() || owner_id.empty() || pv_names.empty() || 
-                start_time == 0 || end_time == 0) {
-                std::cerr << "Error: Missing required parameters for dataset creation\n";
-                std::cerr << "Required: --name, --owner, --pvs, --start, --end\n";
+        if (args.create_mode) {
+            if (!validateCreateArgs(args)) {
                 return 1;
             }
-            
-            if (start_time >= end_time) {
-                std::cerr << "Error: Start time must be before end time\n";
-                return 1;
-            }
-            
-            std::cout << "Creating dataset '" << dataset_name << "'...\n";
-            std::cout << "Owner: " << owner_id << std::endl;
-            std::cout << "PVs: " << pv_names.size() << std::endl;
-            std::cout << "Time range: " << start_time << " to " << end_time 
-                      << " (" << (end_time - start_time) << " seconds)" << std::endl;
-            
-            // Create the dataset
-            TimeRange time_range(start_time, 0, end_time, 0);
-            DataBlock block = makeDataBlock(time_range, pv_names);
-            DataSet dataset = makeDataSet(dataset_name, owner_id, description, {block});
-            
-            auto response = client.createDataSet(makeCreateDataSetRequest(dataset));
-            
-            if (response.has_createdatasetresult()) {
-                std::cout << "\nDataset created successfully!\n";
-                std::cout << "Dataset ID: " << response.createdatasetresult().datasetid() << std::endl;
-            } else {
-                std::cout << "Dataset creation failed\n";
-                if (response.has_exceptionalresult()) {
-                    std::cout << "Error details available in response\n";
-                }
-                return 1;
-            }
-        }
-        else if (query_mode) {
-            QueryDataSetsRequest request;
-            
-            // Build query based on parameters
-            if (!query_id.empty()) {
-                request = makeQueryDataSetsById(query_id);
-            } else if (!query_owner.empty()) {
-                request = makeQueryDataSetsByOwner(query_owner);
-            } else if (!query_text.empty()) {
-                request = makeQueryDataSetsByText(query_text);
-            } else if (!query_pv.empty()) {
-                request = makeQueryDataSetsByPvName(query_pv);
-            } else {
-                // Query all datasets (empty text search)
-                request = makeQueryDataSetsByText("");
-            }
-            
-            auto response = client.queryDataSets(request);
-            
-            if (response.has_datasetsresult()) {
-                const auto& result = response.datasetsresult();
-                std::cout << "Found " << result.datasets_size() << " dataset(s):\n\n";
-                
-                for (const auto& dataset : result.datasets()) {
-                    printDataSet(dataset, verbose);
-                }
-            } else {
-                std::cout << "No datasets found\n";
-                if (response.has_exceptionalresult()) {
-                    std::cout << "Query returned exceptional result\n";
-                }
-            }
+            performCreateDataset(client, args);
+        } else {
+            performQueryDatasets(client, args);
         }
         
         return 0;

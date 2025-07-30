@@ -7,7 +7,6 @@
 #include <regex>
 #include <iomanip>
 
-// Structure to hold parsed PV name components
 struct PvComponents {
     std::string device_type;
     std::string device_area;
@@ -16,7 +15,6 @@ struct PvComponents {
     bool is_valid = false;
 };
 
-// Structure to hold parsed filename components
 struct FileComponents {
     std::string beam_line;
     std::string date;
@@ -25,17 +23,6 @@ struct FileComponents {
     bool is_valid = false;
 };
 
-// Statistics tracking structure
-struct ProcessingStats {
-    size_t total_h5_files = 0;
-    size_t total_pvs = 0;
-    size_t total_timestamps = 0;
-    size_t total_file_size_bytes = 0;
-    std::vector<std::pair<std::string, size_t>> pvs_per_file;
-    std::vector<std::pair<std::string, size_t>> timestamps_per_pv;
-};
-
-// Parse PV name like "BPMS_DMPH_502_TMITBR"
 PvComponents parsePvName(const std::string& pv_name) {
     PvComponents components;
 
@@ -58,7 +45,6 @@ PvComponents parsePvName(const std::string& pv_name) {
     return components;
 }
 
-// Parse filename like "CU_HXR_20250716_224347.h5"
 FileComponents parseFilename(const std::string& filepath) {
     FileComponents components;
 
@@ -227,7 +213,6 @@ private:
                 SignalData signal = createSignal(file, signal_name, timestamps, file_metadata, filepath);
                 parsed_signals_.push_back(std::move(signal));
             } catch (...) {
-                std::cerr << "Failed to process signal: " << signal_name << std::endl;
                 continue;
             }
         }
@@ -347,67 +332,8 @@ std::vector<IngestDataRequest> createRequests(const std::vector<SignalData>& sig
     return requests;
 }
 
-// New function to format file sizes
-std::string formatFileSize(size_t bytes) {
-    const double KB = 1024.0;
-    const double MB = KB * 1024.0;
-    const double GB = MB * 1024.0;
-    
-    std::ostringstream oss;
-    oss << std::fixed << std::setprecision(2);
-    
-    if (bytes >= GB) {
-        oss << (bytes / GB) << " GB";
-    } else if (bytes >= MB) {
-        oss << (bytes / MB) << " MB";
-    } else if (bytes >= KB) {
-        oss << (bytes / KB) << " KB";
-    } else {
-        oss << bytes << " bytes";
-    }
-    
-    return oss.str();
-}
-
-// New function to print processing statistics
-void printProcessingStats(const ProcessingStats& stats) {
-    std::cout << "\n=== PROCESSING SUMMARY ===" << std::endl;
-    std::cout << "Total H5 files processed: " << stats.total_h5_files << std::endl;
-    std::cout << "Total PVs found: " << stats.total_pvs << std::endl;
-    std::cout << "Total timestamps processed: " << stats.total_timestamps << std::endl;
-    std::cout << "Total data size: " << formatFileSize(stats.total_file_size_bytes) << std::endl;
-    
-    std::cout << "\n=== PER-FILE BREAKDOWN ===" << std::endl;
-    for (const auto& [filename, pv_count] : stats.pvs_per_file) {
-        std::cout << std::filesystem::path(filename).filename().string() 
-                  << ": " << pv_count << " PVs" << std::endl;
-    }
-    
-    std::cout << "\n=== PER-PV TIMESTAMP COUNT ===" << std::endl;
-    for (const auto& [pv_name, timestamp_count] : stats.timestamps_per_pv) {
-        std::cout << pv_name << ": " << timestamp_count << " timestamps" << std::endl;
-    }
-    
-    // Calculate averages
-    if (stats.total_h5_files > 0) {
-        double avg_pvs_per_file = static_cast<double>(stats.total_pvs) / stats.total_h5_files;
-        std::cout << "\n=== AVERAGES ===" << std::endl;
-        std::cout << "Average PVs per H5 file: " << std::fixed << std::setprecision(1) 
-                  << avg_pvs_per_file << std::endl;
-    }
-    
-    if (stats.total_pvs > 0) {
-        double avg_timestamps_per_pv = static_cast<double>(stats.total_timestamps) / stats.total_pvs;
-        std::cout << "Average timestamps per PV: " << std::fixed << std::setprecision(1) 
-                  << avg_timestamps_per_pv << std::endl;
-    }
-}
-
 int main(int argc, char* argv[]) {
-    if (argc < 2) {
-        std::cout << "Usage: " << argv[0] << " <h5_directory> [--local-only]\n";
-        return 1;
-    }
+    if (argc < 2) return 1;
 
     std::string h5_directory = argv[1];
     bool local_only = false;
@@ -427,7 +353,6 @@ int main(int argc, char* argv[]) {
         }
 
         if (h5_files.empty()) {
-            std::cerr << "No H5 files found in directory: " << h5_directory << std::endl;
             return 1;
         }
 
@@ -446,73 +371,30 @@ int main(int argc, char* argv[]) {
 
             auto response = client->registerProvider("H5DataProvider", attrs, tags);
             provider_id = response.registrationresult().providerid();
-            std::cout << "Registered provider: " << provider_id << std::endl;
         }
-
-        auto start_time = std::chrono::high_resolution_clock::now();
-        ProcessingStats stats;
 
         for (const auto& file : h5_files) {
             CleanH5Parser parser(h5_directory);
 
-            // Get file size
-            try {
-                stats.total_file_size_bytes += std::filesystem::file_size(file);
-            } catch (...) {
-                // Continue if file size can't be determined
-            }
-
             if (parser.parseFile(file)) {
                 auto signals = parser.getAllSignals();
-                size_t pv_count = signals.size();
-                
-                stats.total_h5_files++;
-                stats.total_pvs += pv_count;
-                stats.pvs_per_file.emplace_back(file, pv_count);
-                
-                // Track timestamps per PV
-                for (const auto& signal : signals) {
-                    size_t timestamp_count = signal.timestamps->count;
-                    stats.total_timestamps += timestamp_count;
-                    stats.timestamps_per_pv.emplace_back(signal.info.full_name, timestamp_count);
-                }
-                
-                std::cout << std::filesystem::path(file).filename() << ": " << pv_count << " signals" << std::endl;
 
                 if (!local_only && !signals.empty()) {
-                    std::cout << "Creating " << signals.size() << " ingest requests for " 
-                              << std::filesystem::path(file).filename() << "..." << std::endl;
                     auto requests = createRequests(signals, provider_id, file);
                     
-                    std::cout << "Starting ingestion of " << requests.size() << " requests..." << std::endl;
                     try {
                         auto ingest_result = client->ingestBatch(requests, provider_id);
-                        std::cout << "✓ Ingestion completed successfully for " 
-                                  << std::filesystem::path(file).filename() << std::endl;
                     } catch (const std::exception& e) {
-                        std::cerr << "✗ Ingestion failed for " << std::filesystem::path(file).filename() 
-                                  << ": " << e.what() << std::endl;
+                        // Continue with next file
                     }
                 }
-            } else {
-                std::cout << "Failed to parse: " << std::filesystem::path(file).filename() << std::endl;
             }
         }
-
-        auto end_time = std::chrono::high_resolution_clock::now();
-        double total_time = std::chrono::duration<double>(end_time - start_time).count();
-
-        std::cout << "\nProcessed " << stats.total_pvs << " signals in "
-                  << std::fixed << std::setprecision(2) << total_time << " seconds" << std::endl;
-
-        // Print comprehensive statistics
-        printProcessingStats(stats);
 
         delete client;
         return 0;
 
     } catch (const std::exception& e) {
-        std::cerr << "Error: " << e.what() << std::endl;
         return 1;
     }
 }

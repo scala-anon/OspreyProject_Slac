@@ -242,6 +242,22 @@ QueryDataSetsRequest makeQueryDataSetsByText(const std::string& text) {
     return request;
 }
 
+QueryDataSetsRequest makeQueryDataSetsByPvName(const std::string& pv_name) {
+    QueryDataSetsRequest request;
+    auto* criterion = request.add_criteria();
+    auto* pvCriterion = criterion->mutable_pvnamecriterion();
+    pvCriterion->set_name(pv_name);
+    return request;
+}
+
+QueryDataSetsRequest makeQueryDataSetsById(const std::string& dataset_id) {
+    QueryDataSetsRequest request;
+    auto* criterion = request.add_criteria();
+    auto* idCriterion = criterion->mutable_idcriterion();
+    idCriterion->set_id(dataset_id);
+    return request;
+}
+
 QueryAnnotationsRequest makeQueryAnnotationsByOwner(const std::string& owner_id) {
     QueryAnnotationsRequest request;
     auto* criterion = request.add_criteria();
@@ -255,6 +271,30 @@ QueryAnnotationsRequest makeQueryAnnotationsByDataSet(const std::string& dataset
     auto* criterion = request.add_criteria();
     auto* datasetCriterion = criterion->mutable_datasetscriterion();
     datasetCriterion->set_datasetid(dataset_id);
+    return request;
+}
+
+QueryAnnotationsRequest makeQueryAnnotationsByText(const std::string& text) {
+    QueryAnnotationsRequest request;
+    auto* criterion = request.add_criteria();
+    auto* textCriterion = criterion->mutable_textcriterion();
+    textCriterion->set_text(text);
+    return request;
+}
+
+QueryAnnotationsRequest makeQueryAnnotationsByTag(const std::string& tag) {
+    QueryAnnotationsRequest request;
+    auto* criterion = request.add_criteria();
+    auto* tagCriterion = criterion->mutable_tagscriterion();
+    tagCriterion->set_tagvalue(tag);
+    return request;
+}
+
+QueryAnnotationsRequest makeQueryAnnotationsById(const std::string& annotation_id) {
+    QueryAnnotationsRequest request;
+    auto* criterion = request.add_criteria();
+    auto* idCriterion = criterion->mutable_idcriterion();
+    idCriterion->set_id(annotation_id);
     return request;
 }
 

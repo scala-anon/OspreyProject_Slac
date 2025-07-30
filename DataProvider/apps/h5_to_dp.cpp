@@ -3,52 +3,121 @@
 #include <H5Cpp.h>
 #include <iostream>
 #include <filesystem>
-#include <future>
-#include <thread>
+#include <sstream>
+#include <regex>
+#include <iomanip>
 
-class OptimizedH5Parser : public H5Parser {
+// Structure to hold parsed PV name components
+struct PvComponents {
+    std::string device_type;
+    std::string device_area;
+    std::string device_location;
+    std::string measurement_type;
+    bool is_valid = false;
+};
+
+// Structure to hold parsed filename components
+struct FileComponents {
+    std::string beam_line;
+    std::string date;
+    std::string time_id;
+    std::string filename;
+    bool is_valid = false;
+};
+
+// Statistics tracking structure
+struct ProcessingStats {
+    size_t total_h5_files = 0;
+    size_t total_pvs = 0;
+    size_t total_timestamps = 0;
+    size_t total_file_size_bytes = 0;
+    std::vector<std::pair<std::string, size_t>> pvs_per_file;
+    std::vector<std::pair<std::string, size_t>> timestamps_per_pv;
+};
+
+// Parse PV name like "BPMS_DMPH_502_TMITBR"
+PvComponents parsePvName(const std::string& pv_name) {
+    PvComponents components;
+
+    std::vector<std::string> parts;
+    std::stringstream ss(pv_name);
+    std::string part;
+
+    while (std::getline(ss, part, '_')) {
+        parts.push_back(part);
+    }
+
+    if (parts.size() >= 4) {
+        components.device_type = parts[0];
+        components.device_area = parts[1];
+        components.device_location = parts[2];
+        components.measurement_type = parts[3];
+        components.is_valid = true;
+    }
+
+    return components;
+}
+
+// Parse filename like "CU_HXR_20250716_224347.h5"
+FileComponents parseFilename(const std::string& filepath) {
+    FileComponents components;
+
+    std::filesystem::path path(filepath);
+    std::string filename = path.stem().string(); // Remove .h5 extension
+    components.filename = path.filename().string();
+
+    std::vector<std::string> parts;
+    std::stringstream ss(filename);
+    std::string part;
+
+    while (std::getline(ss, part, '_')) {
+        parts.push_back(part);
+    }
+
+    if (parts.size() >= 4) {
+        components.beam_line = parts[0] + "_" + parts[1]; // "CU_HXR"
+        components.date = parts[2];  // "20250716"
+        components.time_id = parts[3]; // "224347"
+        components.is_valid = true;
+    }
+
+    return components;
+}
+
+class CleanH5Parser : public H5Parser {
 private:
-    static constexpr size_t CACHE_SIZE = 64 * 1024 * 1024;   // 64MB cache
-    static constexpr size_t BATCH_SIZE = 50;                 // Process signals in batches
+    static constexpr size_t BATCH_SIZE = 50;
 
 public:
-    explicit OptimizedH5Parser(const std::string& h5_directory_path) : H5Parser(h5_directory_path) {
+    explicit CleanH5Parser(const std::string& h5_directory_path) : H5Parser(h5_directory_path) {
         enableSpatialEnrichment(false);
     }
 
     bool parseFile(const std::string& filepath) override {
         try {
-            H5FileMetadata file_metadata = parseFilename(filepath);
+            H5FileMetadata file_metadata = H5Parser::parseFilename(filepath);
             H5::Exception::dontPrint();
-            
-            // Optimized file access
-            H5::FileAccPropList fapl;
-            fapl.setCache(0, 1021, CACHE_SIZE, 0.75);
-            fapl.setFcloseDegree(H5F_CLOSE_STRONG);
-            
-            H5::H5File file(filepath, H5F_ACC_RDONLY, H5::FileCreatPropList::DEFAULT, fapl);
-            
-            // Get timestamps and signals efficiently
+
+            H5::H5File file(filepath, H5F_ACC_RDONLY);
+
             auto timestamps = getTimestamps(file);
             if (!timestamps) {
                 file.close();
                 return false;
             }
-            
+
             file_timestamps_[filepath] = timestamps;
-            
             auto signal_names = getSignalNames(file);
+
             if (signal_names.empty()) {
                 file.close();
                 return false;
             }
-            
-            // Process signals in batches for better memory usage
-            processSignalsBatch(file, signal_names, timestamps, file_metadata);
-            
+
+            processSignals(file, signal_names, timestamps, file_metadata, filepath);
             file.close();
             return true;
-            
+
         } catch (...) {
             return false;
         }
@@ -57,51 +126,53 @@ public:
 private:
     std::shared_ptr<TimestampData> getTimestamps(H5::H5File& file) {
         auto timestamps = std::make_shared<TimestampData>();
-        
+
         try {
             if (file.nameExists("secondsPastEpoch")) {
                 H5::DataSet seconds_ds = file.openDataSet("secondsPastEpoch");
                 H5::DataSpace space = seconds_ds.getSpace();
-                
+
                 hsize_t dims[1];
                 space.getSimpleExtentDims(dims);
-                
+
                 timestamps->seconds.resize(dims[0]);
                 timestamps->nanoseconds.resize(dims[0], 0);
-                
+
                 seconds_ds.read(timestamps->seconds.data(), H5::PredType::NATIVE_UINT64);
-                
+
                 if (file.nameExists("nanoseconds")) {
                     H5::DataSet nanos_ds = file.openDataSet("nanoseconds");
                     nanos_ds.read(timestamps->nanoseconds.data(), H5::PredType::NATIVE_UINT64);
                     nanos_ds.close();
                 }
-                
+
                 timestamps->count = dims[0];
-                timestamps->start_time_sec = dims[0] > 0 ? timestamps->seconds[0] : 0;
-                timestamps->start_time_nano = dims[0] > 0 ? timestamps->nanoseconds[0] : 0;
-                timestamps->end_time_sec = dims[0] > 0 ? timestamps->seconds[dims[0]-1] : 0;
-                timestamps->end_time_nano = dims[0] > 0 ? timestamps->nanoseconds[dims[0]-1] : 0;
-                
-                // Calculate actual sampling period from timestamps
-                if (dims[0] > 1) {
-                    uint64_t first_time = timestamps->seconds[0] * 1000000000ULL + timestamps->nanoseconds[0];
-                    uint64_t second_time = timestamps->seconds[1] * 1000000000ULL + timestamps->nanoseconds[1];
-                    timestamps->period_nanos = second_time - first_time;
-                    
-                    // Validate period (between 1ms and 10s)
-                    if (timestamps->period_nanos < 1000000 || timestamps->period_nanos > 10000000000ULL) {
-                        timestamps->period_nanos = 1000000000; // fallback to 1s
+                if (dims[0] > 0) {
+                    timestamps->start_time_sec = timestamps->seconds[0];
+                    timestamps->start_time_nano = timestamps->nanoseconds[0];
+                    timestamps->end_time_sec = timestamps->seconds[dims[0]-1];
+                    timestamps->end_time_nano = timestamps->nanoseconds[dims[0]-1];
+
+                    // Calculate sampling period
+                    if (dims[0] > 1) {
+                        uint64_t first_time = timestamps->seconds[0] * 1000000000ULL + timestamps->nanoseconds[0];
+                        uint64_t second_time = timestamps->seconds[1] * 1000000000ULL + timestamps->nanoseconds[1];
+                        timestamps->period_nanos = second_time - first_time;
+
+                        // Validate period (1ms to 10s)
+                        if (timestamps->period_nanos < 1000000 || timestamps->period_nanos > 10000000000ULL) {
+                            timestamps->period_nanos = 1000000000; // 1 second fallback
+                        }
+                    } else {
+                        timestamps->period_nanos = 1000000000;
                     }
-                } else {
-                    timestamps->period_nanos = 1000000000; // 1 second default
                 }
                 timestamps->is_regular_sampling = true;
-                
+
                 seconds_ds.close();
                 space.close();
             } else {
-                // Dummy timestamps
+                // No timestamps found - create dummy
                 timestamps->count = 1;
                 timestamps->seconds = {0};
                 timestamps->nanoseconds = {0};
@@ -115,20 +186,21 @@ private:
         } catch (...) {
             return nullptr;
         }
-        
+
         return timestamps;
     }
-    
+
     std::vector<std::string> getSignalNames(H5::H5File& file) {
         std::vector<std::string> names;
-        
+
         try {
             H5::Group root = file.openGroup("/");
             hsize_t num_objects = root.getNumObjs();
-            
+
             for (hsize_t i = 0; i < num_objects; i++) {
                 if (root.getObjTypeByIdx(i) == H5G_DATASET) {
                     std::string obj_name = root.getObjnameByIdx(i);
+                    // Skip timestamp datasets
                     if (obj_name != "secondsPastEpoch" && obj_name != "nanoseconds") {
                         names.push_back(obj_name);
                     }
@@ -138,98 +210,115 @@ private:
         } catch (...) {
             // Return empty on error
         }
-        
+
         return names;
     }
-    
-    void processSignalsBatch(H5::H5File& file,
-                            const std::vector<std::string>& signal_names,
-                            std::shared_ptr<TimestampData> timestamps,
-                            const H5FileMetadata& file_metadata) {
-        
+
+    void processSignals(H5::H5File& file,
+                       const std::vector<std::string>& signal_names,
+                       std::shared_ptr<TimestampData> timestamps,
+                       const H5FileMetadata& file_metadata,
+                       const std::string& filepath) {
+
         parsed_signals_.reserve(parsed_signals_.size() + signal_names.size());
-        
-        // Sequential processing is faster for this workload
-        for (size_t start = 0; start < signal_names.size(); start += BATCH_SIZE) {
-            size_t end = std::min(start + BATCH_SIZE, signal_names.size());
-            
-            std::vector<SignalData> batch_signals;
-            batch_signals.reserve(end - start);
-            
-            for (size_t i = start; i < end; ++i) {
-                try {
-                    SignalData signal = processSignalFast(file, signal_names[i], timestamps, file_metadata);
-                    batch_signals.push_back(std::move(signal));
-                } catch (...) {
-                    continue;
-                }
+
+        for (const auto& signal_name : signal_names) {
+            try {
+                SignalData signal = createSignal(file, signal_name, timestamps, file_metadata, filepath);
+                parsed_signals_.push_back(std::move(signal));
+            } catch (...) {
+                std::cerr << "Failed to process signal: " << signal_name << std::endl;
+                continue;
             }
-            
-            parsed_signals_.insert(parsed_signals_.end(),
-                                 std::make_move_iterator(batch_signals.begin()),
-                                 std::make_move_iterator(batch_signals.end()));
         }
     }
-    
-    SignalData processSignalFast(H5::H5File& file,
-                                const std::string& signal_name,
-                                std::shared_ptr<TimestampData> timestamps,
-                                const H5FileMetadata& file_metadata) {
-        
+
+    SignalData createSignal(H5::H5File& file,
+                           const std::string& signal_name,
+                           std::shared_ptr<TimestampData> timestamps,
+                           const H5FileMetadata& file_metadata,
+                           const std::string& filepath) {
+
         SignalData signal;
         signal.info.full_name = signal_name;
-        signal.info.device = "DEVICE";
-        signal.info.device_area = "AREA";  
-        signal.info.device_location = "LOC";
-        signal.info.device_attribute = "ATTR";
-        signal.info.units = "units";
-        signal.info.signal_type = "measurement";
         signal.timestamps = timestamps;
         signal.file_metadata = file_metadata;
         signal.spatial_enrichment_ready = false;
-        
+
+        // Parse PV name for structured metadata
+        auto pv_components = parsePvName(signal_name);
+        if (pv_components.is_valid) {
+            signal.info.device = pv_components.device_type;
+            signal.info.device_area = pv_components.device_area;
+            signal.info.device_location = pv_components.device_location;
+            signal.info.device_attribute = pv_components.measurement_type;
+        } else {
+            // Fallback for unparseable names
+            signal.info.device = "UNKNOWN";
+            signal.info.device_area = "UNKNOWN";
+            signal.info.device_location = "UNKNOWN";
+            signal.info.device_attribute = "UNKNOWN";
+        }
+
+        signal.info.units = "unknown";
+        signal.info.signal_type = "measurement";
+
+        // Read data values
         H5::DataSet dataset = file.openDataSet(signal_name);
         H5::DataSpace dataspace = dataset.getSpace();
-        
+
         hsize_t dims[1];
         dataspace.getSimpleExtentDims(dims);
         signal.values.resize(dims[0]);
-        
-        // Optimized read with multiple fallback paths
+
+        // Try reading as double, fallback to float, then zeros
         try {
             dataset.read(signal.values.data(), H5::PredType::NATIVE_DOUBLE);
         } catch (...) {
             try {
                 std::vector<float> float_data(dims[0]);
                 dataset.read(float_data.data(), H5::PredType::NATIVE_FLOAT);
-                for (size_t i = 0; i < dims[0]; ++i) {
-                    signal.values[i] = static_cast<double>(float_data[i]);
-                }
+                std::transform(float_data.begin(), float_data.end(), signal.values.begin(),
+                             [](float f) { return static_cast<double>(f); });
             } catch (...) {
-                // Fill with zeros if all else fails
                 std::fill(signal.values.begin(), signal.values.end(), 0.0);
             }
         }
-        
+
         dataset.close();
         dataspace.close();
         return signal;
     }
 };
 
-std::vector<IngestDataRequest> createRequests(const std::vector<SignalData>& signals, const std::string& providerId) {
+std::vector<IngestDataRequest> createRequests(const std::vector<SignalData>& signals,
+                                            const std::string& providerId,
+                                            const std::string& source_filepath) {
     std::vector<IngestDataRequest> requests;
     requests.reserve(signals.size());
+
+    // Parse filename once for all signals from this file
+    auto file_components = parseFilename(source_filepath);
 
     for (size_t i = 0; i < signals.size(); ++i) {
         const auto& signal = signals[i];
         std::string requestId = IngestUtils::generateRequestId("signal_" + std::to_string(i));
 
+        // Build comprehensive attributes
         std::vector<Attribute> attributes;
         attributes.push_back(makeAttribute("pv_name", signal.info.full_name));
+        attributes.push_back(makeAttribute("device_type", signal.info.device));
+        attributes.push_back(makeAttribute("device_area", signal.info.device_area));
+        attributes.push_back(makeAttribute("device_location", signal.info.device_location));
+        attributes.push_back(makeAttribute("measurement_type", signal.info.device_attribute));
 
-        std::vector<std::string> tags;
-        tags.push_back("h5_data");
+        if (file_components.is_valid) {
+            attributes.push_back(makeAttribute("beam_line", file_components.beam_line));
+            attributes.push_back(makeAttribute("acquisition_date", file_components.date));
+            attributes.push_back(makeAttribute("acquisition_time", file_components.time_id));
+        }
+
+        std::vector<std::string> tags = {"h5_data"};
 
         EventMetadata eventMetadata = makeEventMetadata(
             "H5: " + signal.info.full_name,
@@ -248,64 +337,69 @@ std::vector<IngestDataRequest> createRequests(const std::vector<SignalData>& sig
             dataValues.push_back(makeDataValueWithDouble(value));
         }
 
-        std::vector<DataColumn> dataColumns;
-        dataColumns.push_back(makeDataColumn(signal.info.full_name, dataValues));
-        
-        // Add timestamp columns if we have timestamp data
-        if (signal.timestamps->seconds.size() == signal.values.size()) {
-            std::vector<DataValue> timestampSeconds, timestampNanos;
-            timestampSeconds.reserve(signal.timestamps->seconds.size());
-            timestampNanos.reserve(signal.timestamps->nanoseconds.size());
-            
-            for (size_t j = 0; j < signal.timestamps->seconds.size(); ++j) {
-                timestampSeconds.push_back(makeDataValueWithUInt64(signal.timestamps->seconds[j]));
-                timestampNanos.push_back(makeDataValueWithUInt64(signal.timestamps->nanoseconds[j]));
-            }
-            
-            dataColumns.push_back(makeDataColumn(signal.info.full_name + "_timestamp_seconds", timestampSeconds));
-            dataColumns.push_back(makeDataColumn(signal.info.full_name + "_timestamp_nanos", timestampNanos));
-        }
+        std::vector<DataColumn> dataColumns = {
+            makeDataColumn(signal.info.full_name, dataValues)
+        };
 
         requests.push_back(makeIngestDataRequest(providerId, requestId, attributes, tags,
-                                                 eventMetadata, samplingClock, dataColumns));
+                                               eventMetadata, samplingClock, dataColumns));
     }
     return requests;
 }
 
-// Sequential ingestion (current approach)
-void ingestSequential(const std::vector<SignalData>& signals, const std::string& provider_id, IngestClient* client) {
-    auto requests = createRequests(signals, provider_id);
-    client->ingestBatch(requests, provider_id);
-}
-
-// Parallel ingestion for network I/O
-void ingestParallel(const std::vector<SignalData>& signals, const std::string& provider_id, IngestClient* client) {
-    const size_t num_threads = std::min(static_cast<size_t>(4), static_cast<size_t>(std::thread::hardware_concurrency()));
-    const size_t signals_per_thread = (signals.size() + num_threads - 1) / num_threads;
+// New function to format file sizes
+std::string formatFileSize(size_t bytes) {
+    const double KB = 1024.0;
+    const double MB = KB * 1024.0;
+    const double GB = MB * 1024.0;
     
-    std::vector<std::future<void>> futures;
+    std::ostringstream oss;
+    oss << std::fixed << std::setprecision(2);
     
-    for (size_t t = 0; t < num_threads && t * signals_per_thread < signals.size(); ++t) {
-        size_t start = t * signals_per_thread;
-        size_t end = std::min(start + signals_per_thread, signals.size());
-        
-        std::vector<SignalData> thread_signals(signals.begin() + start, signals.begin() + end);
-        
-        auto future = std::async(std::launch::async, [thread_signals, provider_id, client]() {
-            auto requests = createRequests(thread_signals, provider_id);
-            client->ingestBatch(requests, provider_id);
-        });
-        
-        futures.push_back(std::move(future));
+    if (bytes >= GB) {
+        oss << (bytes / GB) << " GB";
+    } else if (bytes >= MB) {
+        oss << (bytes / MB) << " MB";
+    } else if (bytes >= KB) {
+        oss << (bytes / KB) << " KB";
+    } else {
+        oss << bytes << " bytes";
     }
     
-    // Wait for all ingestion threads to complete
-    for (auto& future : futures) {
-        try {
-            future.get();
-        } catch (...) {
-            // Continue with other threads even if one fails
-        }
+    return oss.str();
+}
+
+// New function to print processing statistics
+void printProcessingStats(const ProcessingStats& stats) {
+    std::cout << "\n=== PROCESSING SUMMARY ===" << std::endl;
+    std::cout << "Total H5 files processed: " << stats.total_h5_files << std::endl;
+    std::cout << "Total PVs found: " << stats.total_pvs << std::endl;
+    std::cout << "Total timestamps processed: " << stats.total_timestamps << std::endl;
+    std::cout << "Total data size: " << formatFileSize(stats.total_file_size_bytes) << std::endl;
+    
+    std::cout << "\n=== PER-FILE BREAKDOWN ===" << std::endl;
+    for (const auto& [filename, pv_count] : stats.pvs_per_file) {
+        std::cout << std::filesystem::path(filename).filename().string() 
+                  << ": " << pv_count << " PVs" << std::endl;
+    }
+    
+    std::cout << "\n=== PER-PV TIMESTAMP COUNT ===" << std::endl;
+    for (const auto& [pv_name, timestamp_count] : stats.timestamps_per_pv) {
+        std::cout << pv_name << ": " << timestamp_count << " timestamps" << std::endl;
+    }
+    
+    // Calculate averages
+    if (stats.total_h5_files > 0) {
+        double avg_pvs_per_file = static_cast<double>(stats.total_pvs) / stats.total_h5_files;
+        std::cout << "\n=== AVERAGES ===" << std::endl;
+        std::cout << "Average PVs per H5 file: " << std::fixed << std::setprecision(1) 
+                  << avg_pvs_per_file << std::endl;
+    }
+    
+    if (stats.total_pvs > 0) {
+        double avg_timestamps_per_pv = static_cast<double>(stats.total_timestamps) / stats.total_pvs;
+        std::cout << "Average timestamps per PV: " << std::fixed << std::setprecision(1) 
+                  << avg_timestamps_per_pv << std::endl;
     }
 }
 
@@ -333,7 +427,7 @@ int main(int argc, char* argv[]) {
         }
 
         if (h5_files.empty()) {
-            std::cerr << "No H5 files found\n";
+            std::cerr << "No H5 files found in directory: " << h5_directory << std::endl;
             return 1;
         }
 
@@ -346,42 +440,73 @@ int main(int argc, char* argv[]) {
             client = new IngestClient(config);
 
             std::vector<Attribute> attrs;
-            attrs.push_back(makeAttribute("source", "h5_simple"));
-            std::vector<std::string> tags = {"h5_data"};
+            attrs.push_back(makeAttribute("source", "h5_parser"));
+            attrs.push_back(makeAttribute("version", "2.0"));
+            std::vector<std::string> tags = {"h5_data", "accelerator_data"};
 
-            auto response = client->registerProvider("H5SimpleProvider", attrs, tags);
+            auto response = client->registerProvider("H5DataProvider", attrs, tags);
             provider_id = response.registrationresult().providerid();
+            std::cout << "Registered provider: " << provider_id << std::endl;
         }
 
         auto start_time = std::chrono::high_resolution_clock::now();
-        size_t total_signals = 0;
+        ProcessingStats stats;
 
         for (const auto& file : h5_files) {
-            OptimizedH5Parser parser(h5_directory);
-            
+            CleanH5Parser parser(h5_directory);
+
+            // Get file size
+            try {
+                stats.total_file_size_bytes += std::filesystem::file_size(file);
+            } catch (...) {
+                // Continue if file size can't be determined
+            }
+
             if (parser.parseFile(file)) {
                 auto signals = parser.getAllSignals();
-                total_signals += signals.size();
-                std::cout << std::filesystem::path(file).filename() << ": " << signals.size() << " signals\n";
+                size_t pv_count = signals.size();
+                
+                stats.total_h5_files++;
+                stats.total_pvs += pv_count;
+                stats.pvs_per_file.emplace_back(file, pv_count);
+                
+                // Track timestamps per PV
+                for (const auto& signal : signals) {
+                    size_t timestamp_count = signal.timestamps->count;
+                    stats.total_timestamps += timestamp_count;
+                    stats.timestamps_per_pv.emplace_back(signal.info.full_name, timestamp_count);
+                }
+                
+                std::cout << std::filesystem::path(file).filename() << ": " << pv_count << " signals" << std::endl;
 
                 if (!local_only && !signals.empty()) {
-                    // Adaptive processing: parallel for network I/O, sequential for small batches
-                    if (signals.size() > 100) {
-                        ingestParallel(signals, provider_id, client);
-                    } else {
-                        ingestSequential(signals, provider_id, client);
+                    std::cout << "Creating " << signals.size() << " ingest requests for " 
+                              << std::filesystem::path(file).filename() << "..." << std::endl;
+                    auto requests = createRequests(signals, provider_id, file);
+                    
+                    std::cout << "Starting ingestion of " << requests.size() << " requests..." << std::endl;
+                    try {
+                        auto ingest_result = client->ingestBatch(requests, provider_id);
+                        std::cout << "✓ Ingestion completed successfully for " 
+                                  << std::filesystem::path(file).filename() << std::endl;
+                    } catch (const std::exception& e) {
+                        std::cerr << "✗ Ingestion failed for " << std::filesystem::path(file).filename() 
+                                  << ": " << e.what() << std::endl;
                     }
                 }
             } else {
-                std::cout << "Failed: " << std::filesystem::path(file).filename() << "\n";
+                std::cout << "Failed to parse: " << std::filesystem::path(file).filename() << std::endl;
             }
         }
 
         auto end_time = std::chrono::high_resolution_clock::now();
         double total_time = std::chrono::duration<double>(end_time - start_time).count();
-        
-        std::cout << "Total: " << total_signals << " signals in " 
-                  << std::fixed << std::setprecision(2) << total_time << "s\n";
+
+        std::cout << "\nProcessed " << stats.total_pvs << " signals in "
+                  << std::fixed << std::setprecision(2) << total_time << " seconds" << std::endl;
+
+        // Print comprehensive statistics
+        printProcessingStats(stats);
 
         delete client;
         return 0;

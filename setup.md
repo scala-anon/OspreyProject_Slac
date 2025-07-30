@@ -143,6 +143,7 @@ data-platform/bin/mongodb-docker-create
 #### run mongosh against mongodb docker container
 ```
 data-platform/bin/mongodb-docker-shell
+```
 
 ### run data platform services
 

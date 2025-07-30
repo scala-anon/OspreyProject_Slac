@@ -77,7 +77,7 @@
     "parallel_speedup_target": 4.0
   },
   "provider_defaults": {
-    "description": "LCLS-II Data Provider (50x Optimized)",
+    "description": "LCLS-II Data Provider",
     "tags": ["lcls-ii", "accelerator", "beam-diagnostics", "optimized", "high-throughput"],
     "attributes": {
       "facility": "SLAC",

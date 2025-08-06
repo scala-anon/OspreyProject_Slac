@@ -27,5 +27,6 @@ tmp/
 *.hdf5
 data/
 
+*.backup
 # Keep DataProvider/ - it has its own .gitignore
 # Keep README.md and other documentation files

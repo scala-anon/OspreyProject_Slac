@@ -1,672 +1,874 @@
 #include "query_client.hpp"
-#include <grpcpp/create_channel.h>
-#include <grpcpp/client_context.h>
-#include <iostream>
-#include <fstream>
+#include <thread>
 #include <chrono>
-#include <regex>
-#include <algorithm>
+#include <atomic>
+#include <sstream>
 
-using json = nlohmann::json;
+// ========== StreamQuerySession Implementation ==========
 
-// ===================== TimeRange Implementation =====================
+class QueryClient::StreamQuerySession::Impl
+{
+public:
+    std::shared_ptr<grpc::ClientReader<QueryDataResponse>> reader;
+    std::shared_ptr<grpc::ClientContext> context;
+    std::atomic<bool> done{false};
 
-Timestamp TimeRange::getStartTimestamp() const {
-    return makeTimestamp(start_epoch_sec, start_nano);
-}
+    Impl(std::shared_ptr<grpc::ClientReader<QueryDataResponse>> r,
+         std::shared_ptr<grpc::ClientContext> ctx)
+        : reader(r), context(ctx) {}
+};
 
-Timestamp TimeRange::getEndTimestamp() const {
-    return makeTimestamp(end_epoch_sec, end_nano);
-}
+QueryClient::StreamQuerySession::StreamQuerySession(
+    std::shared_ptr<grpc::ClientReader<QueryDataResponse>> reader,
+    std::shared_ptr<grpc::ClientContext> context)
+    : pImpl(std::make_unique<Impl>(reader, context)) {}
 
-// ===================== QueryClientConfig Implementation =====================
+std::optional<QueryDataResponse> QueryClient::StreamQuerySession::ReadNext()
+{
+    if (pImpl->done || !pImpl->reader)
+        return std::nullopt;
 
-QueryClientConfig QueryClientConfig::fromConfigFile(const std::string& config_path) {
-    QueryClientConfig config;
-    try {
-        std::ifstream file(config_path);
-        if (!file.is_open()) {
-            std::cerr << "Warning: Could not open config file: " << config_path 
-                      << ". Using defaults." << std::endl;
-            return config;
-        }
-        
-        json j;
-        file >> j;
-        return fromJson(j);
-    } catch (const std::exception& e) {
-        std::cerr << "Warning: Error parsing config file: " << e.what() 
-                  << ". Using defaults." << std::endl;
-        return config;
-    }
-}
-
-QueryClientConfig QueryClientConfig::fromJson(const json& j) {
-    QueryClientConfig config;
-    
-    if (j.contains("server_connections")) {
-        const auto& conn = j["server_connections"];
-        if (conn.contains("query_server")) {
-            config.server_address = conn["query_server"];
-        }
-        if (conn.contains("connection_timeout_seconds")) {
-            config.connection_timeout_seconds = conn["connection_timeout_seconds"];
-        }
-        if (conn.contains("max_message_size_mb")) {
-            config.max_message_size_mb = conn["max_message_size_mb"];
-        }
-    }
-    
-    if (j.contains("spatial_enrichment")) {
-        const auto& spatial = j["spatial_enrichment"];
-        if (spatial.contains("enabled")) {
-            config.enable_spatial_queries = spatial["enabled"];
-        }
-        if (spatial.contains("dictionaries_path")) {
-            config.dictionaries_path = spatial["dictionaries_path"];
-        }
-    }
-    
-    return config;
-}
-
-// ===================== QueryClient Implementation =====================
-
-QueryClient::QueryClient(const QueryClientConfig& config) 
-    : config_(config), spatial_queries_enabled_(config.enable_spatial_queries) {
-    initializeConnection();
-    if (config_.enable_spatial_queries) {
-        initializeSpatialEngine();
-    }
-}
-
-QueryClient::QueryClient(const std::string& server_address) 
-    : QueryClient(QueryClientConfig{}) {
-    config_.server_address = server_address;
-    initializeConnection();
-}
-
-QueryClient::QueryClient(const std::string& config_path, bool is_config_file) 
-    : QueryClient(is_config_file ? 
-                   QueryClientConfig::fromConfigFile(config_path) : 
-                   QueryClientConfig{}) {
-    if (!is_config_file) {
-        config_.server_address = config_path;
-        initializeConnection();
-    }
-}
-
-QueryClient::~QueryClient() = default;
-
-void QueryClient::initializeConnection() {
-    grpc::ChannelArguments args;
-    args.SetMaxReceiveMessageSize(config_.max_message_size_mb * 1024 * 1024);
-    args.SetMaxSendMessageSize(config_.max_message_size_mb * 1024 * 1024);
-
-    auto channel = grpc::CreateCustomChannel(
-        config_.server_address,
-        grpc::InsecureChannelCredentials(),
-        args
-    );
-
-    if (!channel->WaitForConnected(
-        std::chrono::system_clock::now() + 
-        std::chrono::seconds(config_.connection_timeout_seconds))) {
-        std::string error = "Failed to connect to MLDP server at " + config_.server_address;
-        std::cerr << error << std::endl;
-        last_error_ = error;
-        throw std::runtime_error("gRPC channel connection timeout");
-    }
-
-    stub_ = dp::service::query::DpQueryService::NewStub(channel);
-}
-
-void QueryClient::initializeSpatialEngine() {
-    try {
-        spatial_engine_ = std::make_unique<SpatialQueryEngine>(config_.dictionaries_path);
-        if (!spatial_engine_->loadDictionaries()) {
-            std::cerr << "Warning: Failed to load spatial dictionaries. "
-                      << "Spatial queries will be disabled." << std::endl;
-            spatial_queries_enabled_ = false;
-            spatial_engine_.reset();
-        }
-    } catch (const std::exception& e) {
-        std::cerr << "Warning: Error initializing spatial engine: " << e.what()
-                  << ". Spatial queries disabled." << std::endl;
-        spatial_queries_enabled_ = false;
-        spatial_engine_.reset();
-    }
-}
-
-// ===================== Basic Query Methods (existing) =====================
-
-QueryDataResponse QueryClient::queryData(const QueryDataRequest& request) {
     QueryDataResponse response;
-    grpc::ClientContext context;
-    grpc::Status status = stub_->queryData(&context, request, &response);
-
-    if (!status.ok()) {
-        std::string error = "QueryData RPC failed: " + status.error_message();
-        std::cerr << error << std::endl;
-        last_error_ = error;
-        throw std::runtime_error(error);
+    if (pImpl->reader->Read(&response))
+    {
+        return response;
     }
-    return response;
+
+    pImpl->done = true;
+    return std::nullopt;
 }
 
-QueryTableResponse QueryClient::queryTable(const QueryTableRequest& request) {
-    QueryTableResponse response;
-    grpc::ClientContext context;
-    grpc::Status status = stub_->queryTable(&context, request, &response);
-
-    if (!status.ok()) {
-        std::string error = "QueryTable RPC failed: " + status.error_message();
-        std::cerr << error << std::endl;
-        last_error_ = error;
-        throw std::runtime_error(error);
-    }
-    return response;
-}
-
-QueryPvMetadataResponse QueryClient::queryPvMetadata(const QueryPvMetadataRequest& request) {
-    QueryPvMetadataResponse response;
-    grpc::ClientContext context;
-    grpc::Status status = stub_->queryPvMetadata(&context, request, &response);
-
-    if (!status.ok()) {
-        std::string error = "QueryPvMetadata RPC failed: " + status.error_message();
-        std::cerr << error << std::endl;
-        last_error_ = error;
-        throw std::runtime_error(error);
-    }
-    return response;
-}
-
-QueryProvidersResponse QueryClient::queryProviders(const QueryProvidersRequest& request) {
-    QueryProvidersResponse response;
-    grpc::ClientContext context;
-    grpc::Status status = stub_->queryProviders(&context, request, &response);
-
-    if (!status.ok()) {
-        std::string error = "QueryProviders RPC failed: " + status.error_message();
-        std::cerr << error << std::endl;
-        last_error_ = error;
-        throw std::runtime_error(error);
-    }
-    return response;
-}
-
-QueryProviderMetadataResponse QueryClient::queryProviderMetadata(const QueryProviderMetadataRequest& request) {
-    QueryProviderMetadataResponse response;
-    grpc::ClientContext context;
-    grpc::Status status = stub_->queryProviderMetadata(&context, request, &response);
-
-    if (!status.ok()) {
-        std::string error = "QueryProviderMetadata RPC failed: " + status.error_message();
-        std::cerr << error << std::endl;
-        last_error_ = error;
-        throw std::runtime_error(error);
-    }
-    return response;
-}
-
-std::vector<QueryDataResponse> QueryClient::queryDataStream(const QueryDataRequest& request) {
+std::vector<QueryDataResponse> QueryClient::StreamQuerySession::ReadAll()
+{
     std::vector<QueryDataResponse> responses;
-    grpc::ClientContext context;
 
-    std::unique_ptr<grpc::ClientReader<QueryDataResponse>> reader(
-        stub_->queryDataStream(&context, request)
-    );
-
-    QueryDataResponse response;
-    while (reader->Read(&response)) {
-        responses.push_back(response);
-    }
-
-    grpc::Status status = reader->Finish();
-
-    if (!status.ok()) {
-        std::string error = "QueryDataStream RPC failed: " + std::to_string(status.error_code()) + 
-                           ": " + status.error_message();
-        std::cerr << error << std::endl;
-        last_error_ = error;
-        throw std::runtime_error(error);
+    while (auto response = ReadNext())
+    {
+        responses.push_back(response.value());
     }
 
     return responses;
 }
 
-// ===================== Spatial-Aware Query Methods (new) =====================
+std::vector<DataBucket> QueryClient::StreamQuerySession::ReadAllDataBuckets()
+{
+    std::vector<DataBucket> all_buckets;
 
-QueryResult QueryClient::queryByArea(const std::string& area, const TimeRange& time_range, 
-                                     const std::vector<std::string>& pv_patterns) {
-    SpatialQueryParams params;
-    params.area = area;
-    return spatialQuery(params, time_range, pv_patterns);
-}
-
-QueryResult QueryClient::queryByBeamPath(const std::string& beam_path, const TimeRange& time_range,
-                                         const std::vector<std::string>& pv_patterns) {
-    SpatialQueryParams params;
-    params.beam_path = beam_path;
-    return spatialQuery(params, time_range, pv_patterns);
-}
-
-QueryResult QueryClient::queryByDeviceClass(const std::string& device_class, const TimeRange& time_range,
-                                            const std::vector<std::string>& pv_patterns) {
-    SpatialQueryParams params;
-    params.device_class = device_class;
-    return spatialQuery(params, time_range, pv_patterns);
-}
-
-QueryResult QueryClient::queryByZRange(double min_z, double max_z, const TimeRange& time_range,
-                                       const std::vector<std::string>& pv_patterns) {
-    SpatialQueryParams params;
-    params.z_range = {min_z, max_z};
-    return spatialQuery(params, time_range, pv_patterns);
-}
-
-QueryResult QueryClient::queryBySequenceRange(const std::string& beam_path, int min_sequence, int max_sequence,
-                                              const TimeRange& time_range, const std::vector<std::string>& pv_patterns) {
-    SpatialQueryParams params;
-    params.beam_path = beam_path;
-    params.area_sequence_min = min_sequence;
-    params.area_sequence_max = max_sequence;
-    return spatialQuery(params, time_range, pv_patterns);
-}
-
-QueryResult QueryClient::spatialQuery(const SpatialQueryParams& spatial_params, const TimeRange& time_range,
-                                      const std::vector<std::string>& pv_patterns) {
-    QueryResult result;
-    auto start_time = std::chrono::high_resolution_clock::now();
-    
-    try {
-        // Get PV names that match spatial criteria
-        std::vector<std::string> pv_names = expandPvPatterns(pv_patterns, spatial_params);
-        
-        if (pv_names.empty()) {
-            result.error_message = "No PVs found matching spatial criteria";
-            return result;
-        }
-        
-        // Create and execute query
-        auto request = createQueryRequest(pv_names, time_range);
-        auto responses = queryDataStream(request);
-        
-        auto end_time = std::chrono::high_resolution_clock::now();
-        result.processing_time_seconds = 
-            std::chrono::duration<double>(end_time - start_time).count();
-        
-        result = processQueryResponses(responses, result.processing_time_seconds);
-        result.success = true;
-        
-    } catch (const std::exception& e) {
-        result.error_message = e.what();
-        result.success = false;
-    }
-    
-    return result;
-}
-
-// ===================== PV Discovery Methods =====================
-
-std::vector<std::string> QueryClient::findPvsByArea(const std::string& area, const std::string& pattern) {
-    if (spatial_engine_) {
-        return spatial_engine_->findPvsByArea(area, pattern);
-    }
-    return {};
-}
-
-std::vector<std::string> QueryClient::findPvsByBeamPath(const std::string& beam_path, const std::string& pattern) {
-    if (spatial_engine_) {
-        return spatial_engine_->findPvsByBeamPath(beam_path, pattern);
-    }
-    return {};
-}
-
-std::vector<std::string> QueryClient::findPvsByDeviceClass(const std::string& device_class, const std::string& pattern) {
-    if (spatial_engine_) {
-        return spatial_engine_->findPvsByDeviceClass(device_class, pattern);
-    }
-    return {};
-}
-
-std::vector<std::string> QueryClient::getAvailableAreas() {
-    if (spatial_engine_) {
-        return spatial_engine_->getAvailableAreas();
-    }
-    return {};
-}
-
-std::vector<std::string> QueryClient::getAvailableBeamPaths() {
-    if (spatial_engine_) {
-        return spatial_engine_->getAvailableBeamPaths();
-    }
-    return {};
-}
-
-std::vector<std::string> QueryClient::getAvailableDeviceClasses() {
-    if (spatial_engine_) {
-        return spatial_engine_->getAvailableDeviceClasses();
-    }
-    return {};
-}
-
-std::vector<std::string> QueryClient::getAreasInBeamPath(const std::string& beam_path) {
-    if (spatial_engine_) {
-        return spatial_engine_->getAreasInBeamPath(beam_path);
-    }
-    return {};
-}
-
-// ===================== Configuration and Control =====================
-
-void QueryClient::updateConfig(const QueryClientConfig& config) {
-    config_ = config;
-    initializeConnection();
-    if (config_.enable_spatial_queries) {
-        initializeSpatialEngine();
-    }
-}
-
-void QueryClient::enableSpatialQueries(bool enable) {
-    if (enable && !spatial_engine_) {
-        initializeSpatialEngine();
-    }
-    spatial_queries_enabled_ = enable && (spatial_engine_ != nullptr);
-}
-
-bool QueryClient::isSpatialQueriesEnabled() const {
-    return spatial_queries_enabled_ && (spatial_engine_ != nullptr);
-}
-
-bool QueryClient::isConnected() const {
-    return stub_ != nullptr;
-}
-
-void QueryClient::reconnect() {
-    initializeConnection();
-}
-
-// ===================== Internal Helper Methods =====================
-
-std::vector<std::string> QueryClient::expandPvPatterns(const std::vector<std::string>& patterns, 
-                                                       const SpatialQueryParams& spatial_params) {
-    if (!spatial_engine_) {
-        return patterns; // Return patterns as-is if no spatial engine
-    }
-    
-    // Get PVs matching spatial criteria
-    auto spatial_pvs = spatial_engine_->findPvsBySpatialParams(spatial_params);
-    
-    if (patterns.empty()) {
-        return spatial_pvs; // Return all spatial matches if no patterns specified
-    }
-    
-    // Filter spatial PVs by patterns
-    std::vector<std::string> filtered_pvs;
-    for (const auto& pattern : patterns) {
-        std::regex regex_pattern(pattern);
-        for (const auto& pv : spatial_pvs) {
-            if (std::regex_match(pv, regex_pattern)) {
-                filtered_pvs.push_back(pv);
+    while (auto response = ReadNext())
+    {
+        if (response->has_querydata())
+        {
+            const auto &query_data = response->querydata();
+            for (const auto &bucket : query_data.databuckets())
+            {
+                all_buckets.push_back(bucket);
             }
         }
     }
-    
-    return filtered_pvs;
+
+    return all_buckets;
 }
 
-QueryDataRequest QueryClient::createQueryRequest(const std::vector<std::string>& pv_names, 
-                                                 const TimeRange& time_range, bool use_serialized) {
-    return makeQueryDataRequest(pv_names, time_range.getStartTimestamp(), 
-                               time_range.getEndTimestamp(), use_serialized);
-}
-
-QueryResult QueryClient::processQueryResponses(const std::vector<QueryDataResponse>& responses, 
-                                               double processing_time) {
-    QueryResult result;
-    result.responses = responses;
-    result.processing_time_seconds = processing_time;
-    result.total_buckets = responses.size();
-    
-    for (const auto& response : responses) {
-        if (response.has_querydata()) {
-            for (const auto& bucket : response.querydata().databuckets()) {
-                if (bucket.has_datacolumn()) {
-                    result.addPvName(bucket.datacolumn().name());
-                    result.total_data_points += bucket.datacolumn().datavalues_size();
-                }
-            }
-        }
+void QueryClient::StreamQuerySession::Cancel()
+{
+    if (pImpl->context)
+    {
+        pImpl->context->TryCancel();
     }
-    
-    return result;
+    pImpl->done = true;
 }
 
-void QueryClient::notifyProgress(size_t buckets_processed, const std::string& current_pv) const {
-    if (progress_callback_) {
-        progress_callback_(buckets_processed, current_pv);
-    }
+bool QueryClient::StreamQuerySession::IsDone() const
+{
+    return pImpl->done;
 }
 
-// ===================== SpatialQueryEngine Stub Implementation =====================
-// (Minimal implementation - would be expanded with actual spatial logic)
+// ========== BidiQuerySession Implementation ==========
 
-SpatialQueryEngine::SpatialQueryEngine(const std::string& dictionaries_path)
-    : dictionaries_path_(dictionaries_path) {
-}
+class QueryClient::BidiQuerySession::Impl
+{
+public:
+    std::shared_ptr<grpc::ClientReaderWriter<QueryDataRequest, QueryDataResponse>> stream;
+    std::shared_ptr<grpc::ClientContext> context;
+    std::atomic<bool> sending_closed{false};
+    bool initial_query_sent{false};
 
-bool SpatialQueryEngine::loadDictionaries() {
-    // Stub implementation - would load actual dictionary files
-    dictionaries_loaded_ = true;
-    return true;
-}
+    Impl(std::shared_ptr<grpc::ClientReaderWriter<QueryDataRequest, QueryDataResponse>> s,
+         std::shared_ptr<grpc::ClientContext> ctx)
+        : stream(s), context(ctx) {}
+};
 
-std::vector<std::string> SpatialQueryEngine::findPvsByArea(const std::string& area, const std::string& pattern) const {
-    // Stub implementation - would return actual PVs for the area
-    return {"BPMS:" + area + ":502:TMITBR", "QUAD:" + area + ":620:BCTRL"};
-}
+QueryClient::BidiQuerySession::BidiQuerySession(
+    std::shared_ptr<grpc::ClientReaderWriter<QueryDataRequest, QueryDataResponse>> stream,
+    std::shared_ptr<grpc::ClientContext> context)
+    : pImpl(std::make_unique<Impl>(stream, context)) {}
 
-std::vector<std::string> SpatialQueryEngine::findPvsByBeamPath(const std::string& beam_path, const std::string& pattern) const {
-    // Stub implementation - would return actual PVs for the beam path
-    return {"BPMS:DMPH:502:TMITBR", "BPMS:LTUH:755:X", "BPMS:DMPS:693:Y"};
-}
+bool QueryClient::BidiQuerySession::SendQuery(const QuerySpec &spec)
+{
+    if (!pImpl->stream || pImpl->initial_query_sent)
+        return false;
 
-std::vector<std::string> SpatialQueryEngine::findPvsByDeviceClass(const std::string& device_class, const std::string& pattern) const {
-    // Stub implementation - would return actual PVs for the device class
-    if (device_class == "beam_position_monitor") {
-        return {"BPMS:DMPH:502:TMITBR", "BPMS:LTUH:755:X", "BPMS:DMPS:693:Y"};
-    }
-    return {};
-}
-
-std::vector<std::string> SpatialQueryEngine::findPvsBySpatialParams(const SpatialQueryParams& params, const std::string& pattern) const {
-    // Stub implementation - would combine all spatial criteria
-    std::vector<std::string> result;
-    
-    if (!params.area.empty()) {
-        auto area_pvs = findPvsByArea(params.area, pattern);
-        result.insert(result.end(), area_pvs.begin(), area_pvs.end());
-    }
-    
-    if (!params.beam_path.empty()) {
-        auto beam_pvs = findPvsByBeamPath(params.beam_path, pattern);
-        result.insert(result.end(), beam_pvs.begin(), beam_pvs.end());
-    }
-    
-    if (!params.device_class.empty()) {
-        auto class_pvs = findPvsByDeviceClass(params.device_class, pattern);
-        result.insert(result.end(), class_pvs.begin(), class_pvs.end());
-    }
-    
-    // Remove duplicates
-    std::sort(result.begin(), result.end());
-    result.erase(std::unique(result.begin(), result.end()), result.end());
-    
-    return result;
-}
-
-std::vector<std::string> SpatialQueryEngine::getAvailableAreas() const {
-    return {"DMPH", "LTUH", "DMPS", "LI23", "LI24"};
-}
-
-std::vector<std::string> SpatialQueryEngine::getAvailableBeamPaths() const {
-    return {"CU_HXR", "SC_SXR", "CU_SXR"};
-}
-
-std::vector<std::string> SpatialQueryEngine::getAvailableDeviceClasses() const {
-    return {"beam_position_monitor", "klystron", "quadrupole", "wire_scanner"};
-}
-
-std::vector<std::string> SpatialQueryEngine::getAreasInBeamPath(const std::string& beam_path) const {
-    if (beam_path == "CU_HXR") {
-        return {"LI20", "LTUH", "DMPH", "DMPS"};
-    }
-    return {};
-}
-
-// ===================== Helper Functions =====================
-
-Timestamp makeTimestamp(uint64_t epoch, uint64_t nano) {
-    Timestamp ts;
-    ts.set_epochseconds(epoch);
-    ts.set_nanoseconds(nano);
-    return ts;
-}
-
-QueryDataRequest makeQueryDataRequest(const std::vector<std::string>& pvNames, const Timestamp& beginTime, const Timestamp& endTime, bool useSerializedDataColumns) {
     QueryDataRequest request;
-    auto* querySpec = request.mutable_queryspec();
+    *request.mutable_queryspec() = spec;
 
-    *querySpec->mutable_begintime() = beginTime;
-    *querySpec->mutable_endtime() = endTime;
-    querySpec->set_useserializeddatacolumns(useSerializedDataColumns);
-
-    for (const auto& pvName : pvNames) {
-        querySpec->add_pvnames(pvName);
+    bool success = pImpl->stream->Write(request);
+    if (success)
+    {
+        pImpl->initial_query_sent = true;
     }
-
-    return request;
+    return success;
 }
 
-QueryTableRequest makeQueryTableRequest(const std::vector<std::string>& pvNames, const Timestamp& beginTime, const Timestamp& endTime, dp::service::query::QueryTableRequest::TableResultFormat format) {
+bool QueryClient::BidiQuerySession::RequestNext()
+{
+    if (!pImpl->stream || !pImpl->initial_query_sent || pImpl->sending_closed)
+        return false;
+
+    QueryDataRequest request;
+    auto *cursor_op = request.mutable_cursorop();
+    cursor_op->set_cursoroperationtype(CursorOperationType::QueryDataRequest_CursorOperation_CursorOperationType_CURSOR_OP_NEXT);
+
+    return pImpl->stream->Write(request);
+}
+
+std::optional<QueryDataResponse> QueryClient::BidiQuerySession::ReadResponse()
+{
+    if (!pImpl->stream)
+        return std::nullopt;
+
+    QueryDataResponse response;
+    if (pImpl->stream->Read(&response))
+    {
+        return response;
+    }
+    return std::nullopt;
+}
+
+std::optional<QueryDataResponse> QueryClient::BidiQuerySession::GetNext()
+{
+    if (RequestNext())
+    {
+        return ReadResponse();
+    }
+    return std::nullopt;
+}
+
+void QueryClient::BidiQuerySession::CloseSending()
+{
+    if (pImpl->stream && !pImpl->sending_closed)
+    {
+        pImpl->stream->WritesDone();
+        pImpl->sending_closed = true;
+    }
+}
+
+void QueryClient::BidiQuerySession::Cancel()
+{
+    if (pImpl->context)
+    {
+        pImpl->context->TryCancel();
+    }
+}
+
+// ========== QueryClient Implementation ==========
+
+class QueryClient::Impl
+{
+public:
+    std::shared_ptr<grpc::Channel> channel;
+    std::unique_ptr<DpQueryService::Stub> stub;
+    CommonClient common_client;
+
+    int default_timeout_seconds = 30;
+    std::string last_error;
+    ClientStats stats;
+
+    Impl(std::shared_ptr<grpc::Channel> ch)
+        : channel(ch), stub(DpQueryService::NewStub(ch)) {}
+};
+
+QueryClient::QueryClient(std::shared_ptr<grpc::Channel> channel)
+    : pImpl(std::make_unique<Impl>(channel)) {}
+
+QueryClient::QueryClient(const std::string &server_address)
+    : pImpl(std::make_unique<Impl>(
+          grpc::CreateChannel(server_address, grpc::InsecureChannelCredentials()))) {}
+
+QueryClient::~QueryClient() = default;
+
+// ========== Time Series Data Query (Unary) ==========
+
+std::vector<DataBucket> QueryClient::QueryData(
+    const Timestamp &begin_time,
+    const Timestamp &end_time,
+    const std::vector<std::string> &pv_names,
+    bool use_serialized)
+{
+
+    auto response = QueryDataWithResponse(begin_time, end_time, pv_names, use_serialized);
+
+    if (response.has_querydata())
+    {
+        std::vector<DataBucket> buckets;
+        for (const auto &bucket : response.querydata().databuckets())
+        {
+            buckets.push_back(bucket);
+            pImpl->stats.total_buckets_received++;
+        }
+        return buckets;
+    }
+
+    if (response.has_exceptionalresult())
+    {
+        pImpl->last_error = response.exceptionalresult().message();
+        pImpl->stats.errors++;
+    }
+
+    return {};
+}
+
+QueryDataResponse QueryClient::QueryDataWithResponse(
+    const Timestamp &begin_time,
+    const Timestamp &end_time,
+    const std::vector<std::string> &pv_names,
+    bool use_serialized)
+{
+
+    auto spec = CreateQuerySpec(begin_time, end_time, pv_names, use_serialized);
+    return QueryDataWithSpec(spec);
+}
+
+QueryDataResponse QueryClient::QueryDataWithSpec(const QuerySpec &spec)
+{
+    QueryDataRequest request;
+    *request.mutable_queryspec() = spec;
+
+    QueryDataResponse response;
+    grpc::ClientContext context;
+
+    auto deadline = std::chrono::system_clock::now() +
+                    std::chrono::seconds(pImpl->default_timeout_seconds);
+    context.set_deadline(deadline);
+
+    grpc::Status status = pImpl->stub->queryData(&context, request, &response);
+
+    pImpl->stats.queries_executed++;
+
+    if (!status.ok())
+    {
+        pImpl->last_error = status.error_message();
+        pImpl->stats.errors++;
+
+        if (!response.has_exceptionalresult())
+        {
+            auto *exceptional = response.mutable_exceptionalresult();
+            exceptional->set_exceptionalresultstatus(
+                ExceptionalResult_ExceptionalResultStatus_RESULT_STATUS_ERROR);
+            exceptional->set_message(status.error_message());
+        }
+    }
+
+    return response;
+}
+
+QuerySpec QueryClient::CreateQuerySpec(
+    const Timestamp &begin_time,
+    const Timestamp &end_time,
+    const std::vector<std::string> &pv_names,
+    bool use_serialized)
+{
+
+    QuerySpec spec;
+    *spec.mutable_begintime() = begin_time;
+    *spec.mutable_endtime() = end_time;
+
+    for (const auto &pv : pv_names)
+    {
+        spec.add_pvnames(pv);
+    }
+
+    spec.set_useserializeddatacolumns(use_serialized);
+
+    return spec;
+}
+
+// ========== Time Series Data Query (Server Streaming) ==========
+
+std::unique_ptr<QueryClient::StreamQuerySession> QueryClient::QueryDataStream(
+    const Timestamp &begin_time,
+    const Timestamp &end_time,
+    const std::vector<std::string> &pv_names,
+    bool use_serialized)
+{
+
+    auto spec = CreateQuerySpec(begin_time, end_time, pv_names, use_serialized);
+
+    QueryDataRequest request;
+    *request.mutable_queryspec() = spec;
+
+    auto context = std::make_shared<grpc::ClientContext>();
+    auto deadline = std::chrono::system_clock::now() +
+                    std::chrono::seconds(pImpl->default_timeout_seconds * 10); // Longer timeout for streams
+    context->set_deadline(deadline);
+
+    auto reader = std::shared_ptr<grpc::ClientReader<QueryDataResponse>>(
+        pImpl->stub->queryDataStream(context.get(), request));
+
+    pImpl->stats.stream_queries++;
+
+    return std::make_unique<StreamQuerySession>(reader, context);
+}
+
+// ========== Time Series Data Query (Bidirectional Streaming) ==========
+
+std::unique_ptr<QueryClient::BidiQuerySession> QueryClient::QueryDataBidiStream()
+{
+    auto context = std::make_shared<grpc::ClientContext>();
+
+    auto stream = std::shared_ptr<grpc::ClientReaderWriter<QueryDataRequest, QueryDataResponse>>(
+        pImpl->stub->queryDataBidiStream(context.get()));
+
+    pImpl->stats.stream_queries++;
+
+    return std::make_unique<BidiQuerySession>(stream, context);
+}
+
+// ========== Tabular Query ==========
+
+std::optional<ColumnTable> QueryClient::QueryTableColumns(
+    const Timestamp &begin_time,
+    const Timestamp &end_time,
+    const std::vector<std::string> &pv_names)
+{
+
+    QueryTableRequest request;
+    request.set_format(TableResultFormat::QueryTableRequest_TableResultFormat_TABLE_FORMAT_COLUMN);
+    *request.mutable_begintime() = begin_time;
+    *request.mutable_endtime() = end_time;
+
+    auto *pv_list = request.mutable_pvnamelist();
+    for (const auto &pv : pv_names)
+    {
+        pv_list->add_pvnames(pv);
+    }
+
+    auto response = QueryTable(request);
+
+    if (response.has_tableresult() && response.tableresult().has_columntable())
+    {
+        return response.tableresult().columntable();
+    }
+
+    return std::nullopt;
+}
+
+std::optional<RowMapTable> QueryClient::QueryTableRows(
+    const Timestamp &begin_time,
+    const Timestamp &end_time,
+    const std::vector<std::string> &pv_names)
+{
+
+    QueryTableRequest request;
+    request.set_format(TableResultFormat::QueryTableRequest_TableResultFormat_TABLE_FORMAT_ROW_MAP);
+    *request.mutable_begintime() = begin_time;
+    *request.mutable_endtime() = end_time;
+
+    auto *pv_list = request.mutable_pvnamelist();
+    for (const auto &pv : pv_names)
+    {
+        pv_list->add_pvnames(pv);
+    }
+
+    auto response = QueryTable(request);
+
+    if (response.has_tableresult() && response.tableresult().has_rowmaptable())
+    {
+        return response.tableresult().rowmaptable();
+    }
+
+    return std::nullopt;
+}
+
+QueryTableResponse QueryClient::QueryTableWithPattern(
+    const Timestamp &begin_time,
+    const Timestamp &end_time,
+    const std::string &pv_pattern,
+    TableResultFormat format)
+{
+
     QueryTableRequest request;
     request.set_format(format);
-    *request.mutable_begintime() = beginTime;
-    *request.mutable_endtime() = endTime;
+    *request.mutable_begintime() = begin_time;
+    *request.mutable_endtime() = end_time;
+    request.mutable_pvnamepattern()->set_pattern(pv_pattern);
 
-    auto* pvNameList = request.mutable_pvnamelist();
-    for (const auto& pvName : pvNames) {
-        pvNameList->add_pvnames(pvName);
+    return QueryTable(request);
+}
+
+QueryTableResponse QueryClient::QueryTable(const QueryTableRequest &request)
+{
+    QueryTableResponse response;
+    grpc::ClientContext context;
+
+    auto deadline = std::chrono::system_clock::now() +
+                    std::chrono::seconds(pImpl->default_timeout_seconds);
+    context.set_deadline(deadline);
+
+    grpc::Status status = pImpl->stub->queryTable(&context, request, &response);
+
+    pImpl->stats.table_queries++;
+
+    if (!status.ok())
+    {
+        pImpl->last_error = status.error_message();
+        pImpl->stats.errors++;
+
+        if (!response.has_exceptionalresult())
+        {
+            auto *exceptional = response.mutable_exceptionalresult();
+            exceptional->set_exceptionalresultstatus(
+                ExceptionalResult_ExceptionalResultStatus_RESULT_STATUS_ERROR);
+            exceptional->set_message(status.error_message());
+        }
     }
 
-    return request;
+    return response;
 }
 
-QueryPvMetadataRequest makeQueryPvMetadataRequest(const std::vector<std::string>& pvNames) {
-    QueryPvMetadataRequest request;
-    auto* pvNameList = request.mutable_pvnamelist();
+// ========== PV Metadata Query ==========
 
-    for (const auto& pvName : pvNames) {
-        pvNameList->add_pvnames(pvName);
+std::vector<PvInfo> QueryClient::QueryPvMetadata(const std::vector<std::string> &pv_names)
+{
+    QueryPvMetadataRequest request;
+    auto *pv_list = request.mutable_pvnamelist();
+    for (const auto &pv : pv_names)
+    {
+        pv_list->add_pvnames(pv);
     }
 
-    return request;
+    auto response = QueryPvMetadataWithResponse(request);
+
+    if (response.has_metadataresult())
+    {
+        std::vector<PvInfo> infos;
+        for (const auto &info : response.metadataresult().pvinfos())
+        {
+            infos.push_back(info);
+        }
+        return infos;
+    }
+
+    return {};
 }
 
-QueryPvMetadataRequest makeQueryPvMetadataRequestWithPattern(const std::string& pattern) {
+std::vector<PvInfo> QueryClient::QueryPvMetadataWithPattern(const std::string &pattern)
+{
     QueryPvMetadataRequest request;
-    auto* pvNamePattern = request.mutable_pvnamepattern();
-    pvNamePattern->set_pattern(pattern);
-    return request;
+    request.mutable_pvnamepattern()->set_pattern(pattern);
+
+    auto response = QueryPvMetadataWithResponse(request);
+
+    if (response.has_metadataresult())
+    {
+        std::vector<PvInfo> infos;
+        for (const auto &info : response.metadataresult().pvinfos())
+        {
+            infos.push_back(info);
+        }
+        return infos;
+    }
+
+    return {};
 }
 
-QueryProvidersRequest makeQueryProvidersRequest(const std::string& textSearch) {
+QueryPvMetadataResponse QueryClient::QueryPvMetadataWithResponse(
+    const QueryPvMetadataRequest &request)
+{
+
+    QueryPvMetadataResponse response;
+    grpc::ClientContext context;
+
+    auto deadline = std::chrono::system_clock::now() +
+                    std::chrono::seconds(pImpl->default_timeout_seconds);
+    context.set_deadline(deadline);
+
+    grpc::Status status = pImpl->stub->queryPvMetadata(&context, request, &response);
+
+    pImpl->stats.metadata_queries++;
+
+    if (!status.ok())
+    {
+        pImpl->last_error = status.error_message();
+        pImpl->stats.errors++;
+
+        if (!response.has_exceptionalresult())
+        {
+            auto *exceptional = response.mutable_exceptionalresult();
+            exceptional->set_exceptionalresultstatus(
+                ExceptionalResult_ExceptionalResultStatus_RESULT_STATUS_ERROR);
+            exceptional->set_message(status.error_message());
+        }
+    }
+
+    return response;
+}
+
+// ========== Provider Query ==========
+
+std::vector<ProviderInfo> QueryClient::QueryAllProviders()
+{
+    auto response = QueryProviders({}); // Empty criteria returns all
+    if (response.has_providersresult())
+    {
+        std::vector<ProviderInfo> infos;
+        for (const auto &info : response.providersresult().providerinfos())
+        {
+            infos.push_back(info);
+        }
+        return infos;
+    }
+    return {};
+}
+
+std::vector<ProviderInfo> QueryClient::QueryProviderById(const std::string &provider_id)
+{
+    std::vector<ProviderCriterion> criteria;
+    criteria.push_back(CreateIdCriterion(provider_id));
+
+    auto response = QueryProviders(criteria);
+
+    if (response.has_providersresult())
+    {
+        std::vector<ProviderInfo> infos;
+        for (const auto &info : response.providersresult().providerinfos())
+        {
+            infos.push_back(info);
+        }
+        return infos;
+    }
+
+    return {};
+}
+
+std::vector<ProviderInfo> QueryClient::QueryProvidersByText(const std::string &search_text)
+{
+    std::vector<ProviderCriterion> criteria;
+    criteria.push_back(CreateTextCriterion(search_text));
+
+    auto response = QueryProviders(criteria);
+
+    if (response.has_providersresult())
+    {
+        std::vector<ProviderInfo> infos;
+        for (const auto &info : response.providersresult().providerinfos())
+        {
+            infos.push_back(info);
+        }
+        return infos;
+    }
+
+    return {};
+}
+
+std::vector<ProviderInfo> QueryClient::QueryProvidersByTag(const std::string &tag)
+{
+    std::vector<ProviderCriterion> criteria;
+    criteria.push_back(CreateTagsCriterion(tag));
+
+    auto response = QueryProviders(criteria);
+
+    if (response.has_providersresult())
+    {
+        std::vector<ProviderInfo> infos;
+        for (const auto &info : response.providersresult().providerinfos())
+        {
+            infos.push_back(info);
+        }
+        return infos;
+    }
+
+    return {};
+}
+
+std::vector<ProviderInfo> QueryClient::QueryProvidersByAttribute(
+    const std::string &key, const std::string &value)
+{
+
+    std::vector<ProviderCriterion> criteria;
+    criteria.push_back(CreateAttributesCriterion(key, value));
+
+    auto response = QueryProviders(criteria);
+
+    if (response.has_providersresult())
+    {
+        std::vector<ProviderInfo> infos;
+        for (const auto &info : response.providersresult().providerinfos())
+        {
+            infos.push_back(info);
+        }
+        return infos;
+    }
+
+    return {};
+}
+
+QueryProvidersResponse QueryClient::QueryProviders(
+    const std::vector<ProviderCriterion> &criteria)
+{
+
     QueryProvidersRequest request;
-
-    if (!textSearch.empty()) {
-        auto* criterion = request.add_criteria();
-        auto* textCriterion = criterion->mutable_textcriterion();
-        textCriterion->set_text(textSearch);
+    for (const auto &criterion : criteria)
+    {
+        *request.add_criteria() = criterion;
     }
 
-    return request;
+    QueryProvidersResponse response;
+    grpc::ClientContext context;
+
+    auto deadline = std::chrono::system_clock::now() +
+                    std::chrono::seconds(pImpl->default_timeout_seconds);
+    context.set_deadline(deadline);
+
+    grpc::Status status = pImpl->stub->queryProviders(&context, request, &response);
+
+    pImpl->stats.provider_queries++;
+
+    if (!status.ok())
+    {
+        pImpl->last_error = status.error_message();
+        pImpl->stats.errors++;
+
+        if (!response.has_exceptionalresult())
+        {
+            auto *exceptional = response.mutable_exceptionalresult();
+            exceptional->set_exceptionalresultstatus(
+                ExceptionalResult_ExceptionalResultStatus_RESULT_STATUS_ERROR);
+            exceptional->set_message(status.error_message());
+        }
+    }
+
+    return response;
 }
 
-QueryProviderMetadataRequest makeQueryProviderMetadataRequest(const std::string& providerId) {
+ProviderCriterion QueryClient::CreateIdCriterion(const std::string &id)
+{
+    ProviderCriterion criterion;
+    criterion.mutable_idcriterion()->set_id(id);
+    return criterion;
+}
+
+ProviderCriterion QueryClient::CreateTextCriterion(const std::string &text)
+{
+    ProviderCriterion criterion;
+    criterion.mutable_textcriterion()->set_text(text);
+    return criterion;
+}
+
+ProviderCriterion QueryClient::CreateTagsCriterion(const std::string &tag)
+{
+    ProviderCriterion criterion;
+    criterion.mutable_tagscriterion()->set_tagvalue(tag);
+    return criterion;
+}
+
+ProviderCriterion QueryClient::CreateAttributesCriterion(
+    const std::string &key, const std::string &value)
+{
+
+    ProviderCriterion criterion;
+    auto *attr_criterion = criterion.mutable_attributescriterion();
+    attr_criterion->set_key(key);
+    attr_criterion->set_value(value);
+    return criterion;
+}
+
+// ========== Provider Metadata Query ==========
+
+std::optional<ProviderMetadata> QueryClient::QueryProviderMetadata(
+    const std::string &provider_id)
+{
+
+    auto response = QueryProviderMetadataWithResponse(provider_id);
+
+    if (response.has_metadataresult() &&
+        response.metadataresult().providermetadatas_size() > 0)
+    {
+        return response.metadataresult().providermetadatas(0);
+    }
+
+    return std::nullopt;
+}
+
+QueryProviderMetadataResponse QueryClient::QueryProviderMetadataWithResponse(
+    const std::string &provider_id)
+{
+
     QueryProviderMetadataRequest request;
-    request.set_providerid(providerId);
-    return request;
+    request.set_providerid(provider_id);
+
+    QueryProviderMetadataResponse response;
+    grpc::ClientContext context;
+
+    auto deadline = std::chrono::system_clock::now() +
+                    std::chrono::seconds(pImpl->default_timeout_seconds);
+    context.set_deadline(deadline);
+
+    grpc::Status status = pImpl->stub->queryProviderMetadata(&context, request, &response);
+
+    pImpl->stats.metadata_queries++;
+
+    if (!status.ok())
+    {
+        pImpl->last_error = status.error_message();
+        pImpl->stats.errors++;
+
+        if (!response.has_exceptionalresult())
+        {
+            auto *exceptional = response.mutable_exceptionalresult();
+            exceptional->set_exceptionalresultstatus(
+                ExceptionalResult_ExceptionalResultStatus_RESULT_STATUS_ERROR);
+            exceptional->set_message(status.error_message());
+        }
+    }
+
+    return response;
 }
 
-// ===================== Utility Functions =====================
+// ========== Utility Methods ==========
 
-namespace QueryUtils {
-    TimeRange createTimeRange(uint64_t start_epoch_sec, uint64_t end_epoch_sec, 
-                             uint64_t start_nano, uint64_t end_nano) {
-        return TimeRange(start_epoch_sec, start_nano, end_epoch_sec, end_nano);
+std::vector<DataValue> QueryClient::ExtractDataValues(const std::vector<DataBucket> &buckets)
+{
+    std::vector<DataValue> all_values;
+
+    for (const auto &bucket : buckets)
+    {
+        DataColumn column;
+
+        if (bucket.has_datacolumn())
+        {
+            column = bucket.datacolumn();
+        }
+        else if (bucket.has_serializeddatacolumn())
+        {
+            column = pImpl->common_client.DeserializeDataColumn(bucket.serializeddatacolumn());
+        }
+
+        auto values = pImpl->common_client.ExtractDataValues(column);
+        all_values.insert(all_values.end(), values.begin(), values.end());
     }
 
-    TimeRange createTimeRangeFromDuration(uint64_t start_epoch_sec, uint64_t duration_seconds,
-                                         uint64_t start_nano) {
-        return TimeRange(start_epoch_sec, start_nano, 
-                        start_epoch_sec + duration_seconds, start_nano);
+    return all_values;
+}
+
+std::vector<Timestamp> QueryClient::ExtractTimestamps(const std::vector<DataBucket> &buckets)
+{
+    std::vector<Timestamp> all_timestamps;
+
+    for (const auto &bucket : buckets)
+    {
+        auto timestamps = pImpl->common_client.ExtractAllTimestamps(bucket.datatimestamps());
+        all_timestamps.insert(all_timestamps.end(), timestamps.begin(), timestamps.end());
     }
 
-    uint64_t getCurrentEpochSeconds() {
-        return std::chrono::system_clock::now().time_since_epoch() / std::chrono::seconds(1);
+    return all_timestamps;
+}
+
+std::map<std::string, std::vector<DataValue>> QueryClient::ColumnTableToMap(
+    const ColumnTable &table)
+{
+
+    std::map<std::string, std::vector<DataValue>> result;
+
+    for (const auto &column : table.datacolumns())
+    {
+        result[column.name()] = pImpl->common_client.ExtractDataValues(column);
     }
 
-    TimeRange createRecentTimeRange(uint64_t duration_seconds) {
-        uint64_t now = getCurrentEpochSeconds();
-        return TimeRange(now - duration_seconds, 0, now, 0);
+    return result;
+}
+
+std::vector<std::map<std::string, DataValue>> QueryClient::RowTableToVector(
+    const RowMapTable &table)
+{
+
+    std::vector<std::map<std::string, DataValue>> result;
+
+    for (const auto &row : table.rows())
+    {
+        std::map<std::string, DataValue> row_map;
+        for (const auto &[key, value] : row.columnvalues())
+        {
+            row_map[key] = value;
+        }
+        result.push_back(row_map);
     }
 
-    SpatialQueryParams createAreaQuery(const std::string& area) {
-        SpatialQueryParams params;
-        params.area = area;
-        return params;
-    }
+    return result;
+}
 
-    SpatialQueryParams createBeamPathQuery(const std::string& beam_path) {
-        SpatialQueryParams params;
-        params.beam_path = beam_path;
-        return params;
+DataColumn QueryClient::DeserializeDataBucket(const DataBucket &bucket)
+{
+    if (bucket.has_datacolumn())
+    {
+        return bucket.datacolumn();
     }
+    else if (bucket.has_serializeddatacolumn())
+    {
+        return pImpl->common_client.DeserializeDataColumn(bucket.serializeddatacolumn());
+    }
+    return DataColumn();
+}
 
-    SpatialQueryParams createDeviceClassQuery(const std::string& device_class) {
-        SpatialQueryParams params;
-        params.device_class = device_class;
-        return params;
-    }
+// ========== Connection and Error Management ==========
 
-    SpatialQueryParams createZRangeQuery(double min_z, double max_z) {
-        SpatialQueryParams params;
-        params.z_range = {min_z, max_z};
-        return params;
-    }
+bool QueryClient::IsConnected() const
+{
+    return pImpl->channel->GetState(false) == GRPC_CHANNEL_READY;
+}
 
-    SpatialQueryParams createSequenceQuery(const std::string& beam_path, int min_seq, int max_seq) {
-        SpatialQueryParams params;
-        params.beam_path = beam_path;
-        params.area_sequence_min = min_seq;
-        params.area_sequence_max = max_seq;
-        return params;
-    }
+grpc_connectivity_state QueryClient::GetChannelState() const
+{
+    return pImpl->channel->GetState(false);
+}
 
-    SpatialQueryParams combineSpatialParams(const SpatialQueryParams& base, const SpatialQueryParams& additional) {
-        SpatialQueryParams combined = base;
-        
-        if (!additional.beam_path.empty()) combined.beam_path = additional.beam_path;
-        if (!additional.area.empty()) combined.area = additional.area;
-        if (!additional.device_class.empty()) combined.device_class = additional.device_class;
-        if (!additional.z_range.empty()) combined.z_range = additional.z_range;
-        if (additional.area_sequence_min != -1) combined.area_sequence_min = additional.area_sequence_min;
-        if (additional.area_sequence_max != -1) combined.area_sequence_max = additional.area_sequence_max;
-        
-        combined.areas.insert(combined.areas.end(), additional.areas.begin(), additional.areas.end());
-        
-        return combined;
-    }
+bool QueryClient::WaitForConnection(int timeout_seconds)
+{
+    auto deadline = std::chrono::system_clock::now() +
+                    std::chrono::seconds(timeout_seconds);
+    return pImpl->channel->WaitForConnected(deadline);
+}
+
+void QueryClient::SetDefaultTimeout(int seconds)
+{
+    pImpl->default_timeout_seconds = seconds;
+}
+
+int QueryClient::GetDefaultTimeout() const
+{
+    return pImpl->default_timeout_seconds;
+}
+
+std::string QueryClient::GetLastError() const
+{
+    return pImpl->last_error;
+}
+
+void QueryClient::ClearLastError()
+{
+    pImpl->last_error.clear();
+}
+
+QueryClient::ClientStats QueryClient::GetStats() const
+{
+    return pImpl->stats;
+}
+
+void QueryClient::ResetStats()
+{
+    pImpl->stats = ClientStats{};
+}
+
+CommonClient &QueryClient::GetCommonClient()
+{
+    return pImpl->common_client;
 }

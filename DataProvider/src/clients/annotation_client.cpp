@@ -1,325 +1,969 @@
 #include "annotation_client.hpp"
-#include <grpcpp/create_channel.h>
-#include <grpcpp/client_context.h>
-#include <iostream>
-#include <fstream>
 #include <chrono>
+#include <sstream>
 
-using json = nlohmann::json;
+// ========== AnnotationClient Implementation ==========
 
-// ===================== TimeRange Implementation =====================
+class AnnotationClient::Impl
+{
+public:
+    std::shared_ptr<grpc::Channel> channel;
+    std::unique_ptr<DpAnnotationService::Stub> stub;
+    CommonClient common_client;
 
-Timestamp TimeRange::getStartTimestamp() const {
-    return makeTimestamp(start_epoch_sec, start_nano);
-}
+    int default_timeout_seconds = 30;
+    std::string last_error;
+    ClientStats stats;
 
-Timestamp TimeRange::getEndTimestamp() const {
-    return makeTimestamp(end_epoch_sec, end_nano);
-}
+    Impl(std::shared_ptr<grpc::Channel> ch)
+        : channel(ch), stub(DpAnnotationService::NewStub(ch)) {}
+};
 
-// ===================== AnnotationClientConfig Implementation =====================
+AnnotationClient::AnnotationClient(std::shared_ptr<grpc::Channel> channel)
+    : pImpl(std::make_unique<Impl>(channel)) {}
 
-AnnotationClientConfig AnnotationClientConfig::fromConfigFile(const std::string& config_path) {
-    AnnotationClientConfig config;
-    try {
-        std::ifstream file(config_path);
-        if (!file.is_open()) {
-            return config;
-        }
-        json j;
-        file >> j;
-        return fromJson(j);
-    } catch (const std::exception&) {
-        return config;
-    }
-}
-
-AnnotationClientConfig AnnotationClientConfig::fromJson(const json& j) {
-    AnnotationClientConfig config;
-
-    if (j.contains("server_connections")) {
-        const auto& conn = j["server_connections"];
-        if (conn.contains("annotation_server")) {
-            config.server_address = conn["annotation_server"];
-        }
-        if (conn.contains("connection_timeout_seconds")) {
-            config.connection_timeout_seconds = conn["connection_timeout_seconds"];
-        }
-        if (conn.contains("max_message_size_mb")) {
-            config.max_message_size_mb = conn["max_message_size_mb"];
-        }
-    }
-
-    return config;
-}
-
-// ===================== AnnotationClient Implementation =====================
-
-AnnotationClient::AnnotationClient(const AnnotationClientConfig& config)
-    : config_(config) {
-    initializeConnection();
-}
-
-AnnotationClient::AnnotationClient(const std::string& server_address)
-    : AnnotationClient(AnnotationClientConfig{}) {
-    config_.server_address = server_address;
-    initializeConnection();
-}
+AnnotationClient::AnnotationClient(const std::string &server_address)
+    : pImpl(std::make_unique<Impl>(
+          grpc::CreateChannel(server_address, grpc::InsecureChannelCredentials()))) {}
 
 AnnotationClient::~AnnotationClient() = default;
 
-void AnnotationClient::initializeConnection() {
-    grpc::ChannelArguments args;
-    args.SetMaxReceiveMessageSize(config_.max_message_size_mb * 1024 * 1024);
-    args.SetMaxSendMessageSize(config_.max_message_size_mb * 1024 * 1024);
+// ========== DataSet Operations ==========
 
-    auto channel = grpc::CreateCustomChannel(
-        config_.server_address,
-        grpc::InsecureChannelCredentials(),
-        args
-    );
+std::optional<std::string> AnnotationClient::CreateDataSet(
+    const std::string &name,
+    const std::string &owner_id,
+    const std::vector<DataBlock> &data_blocks,
+    const std::string &description)
+{
 
-    if (!channel->WaitForConnected(
-        std::chrono::system_clock::now() +
-        std::chrono::seconds(config_.connection_timeout_seconds))) {
-        std::string error = "Failed to connect to annotation server at " + config_.server_address;
-        std::cerr << error << std::endl;
-        last_error_ = error;
-        throw std::runtime_error("gRPC channel connection timeout");
+    auto dataset = CreateDataSetObject(name, owner_id, data_blocks, description);
+    auto response = CreateDataSetWithResponse(dataset);
+
+    if (response.has_createdatasetresult())
+    {
+        pImpl->stats.datasets_created++;
+        return response.createdatasetresult().datasetid();
     }
 
-    stub_ = dp::service::annotation::DpAnnotationService::NewStub(channel);
+    if (response.has_exceptionalresult())
+    {
+        pImpl->last_error = response.exceptionalresult().message();
+        pImpl->stats.errors++;
+    }
+
+    return std::nullopt;
 }
 
-// ===================== Core RPC Methods =====================
+CreateDataSetResponse AnnotationClient::CreateDataSetWithResponse(const DataSet &dataset)
+{
+    CreateDataSetRequest request;
+    *request.mutable_dataset() = dataset;
 
-CreateDataSetResponse AnnotationClient::createDataSet(const CreateDataSetRequest& request) {
     CreateDataSetResponse response;
     grpc::ClientContext context;
-    grpc::Status status = stub_->createDataSet(&context, request, &response);
 
-    if (!status.ok()) {
-        std::string error = "CreateDataSet RPC failed: " + status.error_message();
-        std::cerr << error << std::endl;
-        last_error_ = error;
-        throw std::runtime_error(error);
+    auto deadline = std::chrono::system_clock::now() +
+                    std::chrono::seconds(pImpl->default_timeout_seconds);
+    context.set_deadline(deadline);
+
+    grpc::Status status = pImpl->stub->createDataSet(&context, request, &response);
+
+    if (!status.ok())
+    {
+        pImpl->last_error = status.error_message();
+        pImpl->stats.errors++;
+
+        if (!response.has_exceptionalresult())
+        {
+            auto *exceptional = response.mutable_exceptionalresult();
+            exceptional->set_exceptionalresultstatus(
+                ExceptionalResult_ExceptionalResultStatus_RESULT_STATUS_ERROR);
+            exceptional->set_message(status.error_message());
+        }
     }
+
     return response;
 }
 
-QueryDataSetsResponse AnnotationClient::queryDataSets(const QueryDataSetsRequest& request) {
-    QueryDataSetsResponse response;
-    grpc::ClientContext context;
-    grpc::Status status = stub_->queryDataSets(&context, request, &response);
+DataBlock AnnotationClient::CreateDataBlock(
+    const Timestamp &begin_time,
+    const Timestamp &end_time,
+    const std::vector<std::string> &pv_names)
+{
 
-    if (!status.ok()) {
-        std::string error = "QueryDataSets RPC failed: " + status.error_message();
-        std::cerr << error << std::endl;
-        last_error_ = error;
-        throw std::runtime_error(error);
-    }
-    return response;
-}
-
-CreateAnnotationResponse AnnotationClient::createAnnotation(const CreateAnnotationRequest& request) {
-    CreateAnnotationResponse response;
-    grpc::ClientContext context;
-    grpc::Status status = stub_->createAnnotation(&context, request, &response);
-
-    if (!status.ok()) {
-        std::string error = "CreateAnnotation RPC failed: " + status.error_message();
-        std::cerr << error << std::endl;
-        last_error_ = error;
-        throw std::runtime_error(error);
-    }
-    return response;
-}
-
-QueryAnnotationsResponse AnnotationClient::queryAnnotations(const QueryAnnotationsRequest& request) {
-    QueryAnnotationsResponse response;
-    grpc::ClientContext context;
-    grpc::Status status = stub_->queryAnnotations(&context, request, &response);
-
-    if (!status.ok()) {
-        std::string error = "QueryAnnotations RPC failed: " + status.error_message();
-        std::cerr << error << std::endl;
-        last_error_ = error;
-        throw std::runtime_error(error);
-    }
-    return response;
-}
-
-ExportDataResponse AnnotationClient::exportData(const ExportDataRequest& request) {
-    ExportDataResponse response;
-    grpc::ClientContext context;
-    grpc::Status status = stub_->exportData(&context, request, &response);
-
-    if (!status.ok()) {
-        std::string error = "ExportData RPC failed: " + status.error_message();
-        std::cerr << error << std::endl;
-        last_error_ = error;
-        throw std::runtime_error(error);
-    }
-    return response;
-}
-
-// ===================== Connection Management =====================
-
-bool AnnotationClient::isConnected() const {
-    return stub_ != nullptr;
-}
-
-void AnnotationClient::reconnect() {
-    initializeConnection();
-}
-
-void AnnotationClient::updateConfig(const AnnotationClientConfig& config) {
-    config_ = config;
-    initializeConnection();
-}
-
-// ===================== Helper Functions Implementation =====================
-
-Timestamp makeTimestamp(uint64_t epoch, uint64_t nano) {
-    Timestamp ts;
-    ts.set_epochseconds(epoch);
-    ts.set_nanoseconds(nano);
-    return ts;
-}
-
-DataSet makeDataSet(const std::string& name, const std::string& owner_id, 
-                   const std::string& description, const std::vector<DataBlock>& data_blocks) {
-    DataSet dataset;
-    dataset.set_name(name);
-    dataset.set_ownerid(owner_id);
-    dataset.set_description(description);
-    for (const auto& block : data_blocks) {
-        *dataset.add_datablocks() = block;
-    }
-    return dataset;
-}
-
-DataBlock makeDataBlock(const TimeRange& time_range, const std::vector<std::string>& pv_names) {
     DataBlock block;
-    *block.mutable_begintime() = time_range.getStartTimestamp();
-    *block.mutable_endtime() = time_range.getEndTimestamp();
-    for (const auto& pv : pv_names) {
+    *block.mutable_begintime() = begin_time;
+    *block.mutable_endtime() = end_time;
+
+    for (const auto &pv : pv_names)
+    {
         block.add_pvnames(pv);
     }
+
     return block;
 }
 
-CreateDataSetRequest makeCreateDataSetRequest(const DataSet& dataset) {
-    CreateDataSetRequest request;
-    *request.mutable_dataset() = dataset;
-    return request;
+DataSet AnnotationClient::CreateDataSetObject(
+    const std::string &name,
+    const std::string &owner_id,
+    const std::vector<DataBlock> &data_blocks,
+    const std::string &description)
+{
+
+    DataSet dataset;
+    dataset.set_name(name);
+    dataset.set_ownerid(owner_id);
+
+    if (!description.empty())
+    {
+        dataset.set_description(description);
+    }
+
+    for (const auto &block : data_blocks)
+    {
+        *dataset.add_datablocks() = block;
+    }
+
+    return dataset;
 }
 
-CreateAnnotationRequest makeCreateAnnotationRequest(const std::string& owner_id, const std::string& name,
-                                                   const std::vector<std::string>& dataset_ids) {
+// ========== DataSet Query Operations ==========
+
+std::vector<DataSet> AnnotationClient::QueryAllDataSets()
+{
+    auto response = QueryDataSets({}); // Empty criteria returns all
+    if (response.has_datasetsresult())
+    {
+        std::vector<DataSet> datasets;
+        for (const auto &ds : response.datasetsresult().datasets())
+        {
+            datasets.push_back(ds);
+        }
+        return datasets;
+    }
+    return {};
+}
+
+std::vector<DataSet> AnnotationClient::QueryDataSetById(const std::string &dataset_id)
+{
+    std::vector<QueryDataSetsCriterion> criteria;
+    criteria.push_back(CreateDataSetIdCriterion(dataset_id));
+
+    auto response = QueryDataSets(criteria);
+
+    if (response.has_datasetsresult())
+    {
+        std::vector<DataSet> datasets;
+        for (const auto &ds : response.datasetsresult().datasets())
+        {
+            datasets.push_back(ds);
+        }
+        return datasets;
+    }
+
+    return {};
+}
+
+std::vector<DataSet> AnnotationClient::QueryDataSetsByOwner(const std::string &owner_id)
+{
+    std::vector<QueryDataSetsCriterion> criteria;
+    criteria.push_back(CreateDataSetOwnerCriterion(owner_id));
+
+    auto response = QueryDataSets(criteria);
+
+    if (response.has_datasetsresult())
+    {
+        std::vector<DataSet> datasets;
+        for (const auto &ds : response.datasetsresult().datasets())
+        {
+            datasets.push_back(ds);
+        }
+        return datasets;
+    }
+
+    return {};
+}
+
+std::vector<DataSet> AnnotationClient::QueryDataSetsByText(const std::string &search_text)
+{
+    std::vector<QueryDataSetsCriterion> criteria;
+    criteria.push_back(CreateDataSetTextCriterion(search_text));
+
+    auto response = QueryDataSets(criteria);
+
+    if (response.has_datasetsresult())
+    {
+        std::vector<DataSet> datasets;
+        for (const auto &ds : response.datasetsresult().datasets())
+        {
+            datasets.push_back(ds);
+        }
+        return datasets;
+    }
+
+    return {};
+}
+
+std::vector<DataSet> AnnotationClient::QueryDataSetsByPvName(const std::string &pv_name)
+{
+    std::vector<QueryDataSetsCriterion> criteria;
+    criteria.push_back(CreateDataSetPvNameCriterion(pv_name));
+
+    auto response = QueryDataSets(criteria);
+
+    if (response.has_datasetsresult())
+    {
+        std::vector<DataSet> datasets;
+        for (const auto &ds : response.datasetsresult().datasets())
+        {
+            datasets.push_back(ds);
+        }
+        return datasets;
+    }
+
+    return {};
+}
+
+QueryDataSetsResponse AnnotationClient::QueryDataSets(
+    const std::vector<QueryDataSetsCriterion> &criteria)
+{
+
+    QueryDataSetsRequest request;
+    for (const auto &criterion : criteria)
+    {
+        *request.add_criteria() = criterion;
+    }
+
+    QueryDataSetsResponse response;
+    grpc::ClientContext context;
+
+    auto deadline = std::chrono::system_clock::now() +
+                    std::chrono::seconds(pImpl->default_timeout_seconds);
+    context.set_deadline(deadline);
+
+    grpc::Status status = pImpl->stub->queryDataSets(&context, request, &response);
+
+    pImpl->stats.datasets_queried++;
+
+    if (!status.ok())
+    {
+        pImpl->last_error = status.error_message();
+        pImpl->stats.errors++;
+
+        if (!response.has_exceptionalresult())
+        {
+            auto *exceptional = response.mutable_exceptionalresult();
+            exceptional->set_exceptionalresultstatus(
+                ExceptionalResult_ExceptionalResultStatus_RESULT_STATUS_ERROR);
+            exceptional->set_message(status.error_message());
+        }
+    }
+
+    return response;
+}
+
+QueryDataSetsCriterion AnnotationClient::CreateDataSetIdCriterion(const std::string &id)
+{
+    QueryDataSetsCriterion criterion;
+    criterion.mutable_idcriterion()->set_id(id);
+    return criterion;
+}
+
+QueryDataSetsCriterion AnnotationClient::CreateDataSetOwnerCriterion(const std::string &owner_id)
+{
+    QueryDataSetsCriterion criterion;
+    criterion.mutable_ownercriterion()->set_ownerid(owner_id);
+    return criterion;
+}
+
+QueryDataSetsCriterion AnnotationClient::CreateDataSetTextCriterion(const std::string &text)
+{
+    QueryDataSetsCriterion criterion;
+    criterion.mutable_textcriterion()->set_text(text);
+    return criterion;
+}
+
+QueryDataSetsCriterion AnnotationClient::CreateDataSetPvNameCriterion(const std::string &pv_name)
+{
+    QueryDataSetsCriterion criterion;
+    criterion.mutable_pvnamecriterion()->set_name(pv_name);
+    return criterion;
+}
+
+// ========== Annotation Operations ==========
+
+std::optional<std::string> AnnotationClient::CreateAnnotation(
+    const std::string &owner_id,
+    const std::vector<std::string> &dataset_ids,
+    const std::string &name,
+    const std::string &comment,
+    const std::vector<std::string> &tags,
+    const std::vector<Attribute> &attributes)
+{
+
     CreateAnnotationRequest request;
     request.set_ownerid(owner_id);
     request.set_name(name);
-    for (const auto& id : dataset_ids) {
+
+    for (const auto &id : dataset_ids)
+    {
         request.add_datasetids(id);
     }
-    return request;
+
+    if (!comment.empty())
+    {
+        request.set_comment(comment);
+    }
+
+    for (const auto &tag : tags)
+    {
+        request.add_tags(tag);
+    }
+
+    for (const auto &attr : attributes)
+    {
+        *request.add_attributes() = attr;
+    }
+
+    auto response = CreateAnnotationWithResponse(request);
+
+    if (response.has_createannotationresult())
+    {
+        pImpl->stats.annotations_created++;
+        return response.createannotationresult().annotationid();
+    }
+
+    if (response.has_exceptionalresult())
+    {
+        pImpl->last_error = response.exceptionalresult().message();
+        pImpl->stats.errors++;
+    }
+
+    return std::nullopt;
 }
 
-QueryDataSetsRequest makeQueryDataSetsByOwner(const std::string& owner_id) {
-    QueryDataSetsRequest request;
-    auto* criterion = request.add_criteria();
-    auto* ownerCriterion = criterion->mutable_ownercriterion();
-    ownerCriterion->set_ownerid(owner_id);
-    return request;
+std::optional<std::string> AnnotationClient::CreateAnnotationWithCalculations(
+    const std::string &owner_id,
+    const std::vector<std::string> &dataset_ids,
+    const std::string &name,
+    const Calculations &calculations,
+    const std::string &comment,
+    const std::vector<std::string> &tags,
+    const std::vector<Attribute> &attributes)
+{
+
+    CreateAnnotationRequest request;
+    request.set_ownerid(owner_id);
+    request.set_name(name);
+    *request.mutable_calculations() = calculations;
+
+    for (const auto &id : dataset_ids)
+    {
+        request.add_datasetids(id);
+    }
+
+    if (!comment.empty())
+    {
+        request.set_comment(comment);
+    }
+
+    for (const auto &tag : tags)
+    {
+        request.add_tags(tag);
+    }
+
+    for (const auto &attr : attributes)
+    {
+        *request.add_attributes() = attr;
+    }
+
+    auto response = CreateAnnotationWithResponse(request);
+
+    if (response.has_createannotationresult())
+    {
+        pImpl->stats.annotations_created++;
+        return response.createannotationresult().annotationid();
+    }
+
+    if (response.has_exceptionalresult())
+    {
+        pImpl->last_error = response.exceptionalresult().message();
+        pImpl->stats.errors++;
+    }
+
+    return std::nullopt;
 }
 
-QueryDataSetsRequest makeQueryDataSetsByText(const std::string& text) {
-    QueryDataSetsRequest request;
-    auto* criterion = request.add_criteria();
-    auto* textCriterion = criterion->mutable_textcriterion();
-    textCriterion->set_text(text);
-    return request;
+CreateAnnotationResponse AnnotationClient::CreateAnnotationWithResponse(
+    const CreateAnnotationRequest &request)
+{
+
+    CreateAnnotationResponse response;
+    grpc::ClientContext context;
+
+    auto deadline = std::chrono::system_clock::now() +
+                    std::chrono::seconds(pImpl->default_timeout_seconds);
+    context.set_deadline(deadline);
+
+    grpc::Status status = pImpl->stub->createAnnotation(&context, request, &response);
+
+    if (!status.ok())
+    {
+        pImpl->last_error = status.error_message();
+        pImpl->stats.errors++;
+
+        if (!response.has_exceptionalresult())
+        {
+            auto *exceptional = response.mutable_exceptionalresult();
+            exceptional->set_exceptionalresultstatus(
+                ExceptionalResult_ExceptionalResultStatus_RESULT_STATUS_ERROR);
+            exceptional->set_message(status.error_message());
+        }
+    }
+
+    return response;
 }
 
-QueryDataSetsRequest makeQueryDataSetsByPvName(const std::string& pv_name) {
-    QueryDataSetsRequest request;
-    auto* criterion = request.add_criteria();
-    auto* pvCriterion = criterion->mutable_pvnamecriterion();
-    pvCriterion->set_name(pv_name);
-    return request;
+Calculations AnnotationClient::CreateCalculations(
+    const std::string &id,
+    const std::vector<CalculationsDataFrame> &frames)
+{
+
+    Calculations calcs;
+    calcs.set_id(id);
+
+    for (const auto &frame : frames)
+    {
+        *calcs.add_calculationdataframes() = frame;
+    }
+
+    return calcs;
 }
 
-QueryDataSetsRequest makeQueryDataSetsById(const std::string& dataset_id) {
-    QueryDataSetsRequest request;
-    auto* criterion = request.add_criteria();
-    auto* idCriterion = criterion->mutable_idcriterion();
-    idCriterion->set_id(dataset_id);
-    return request;
+CalculationsDataFrame AnnotationClient::CreateCalculationsDataFrame(
+    const std::string &name,
+    const DataTimestamps &timestamps,
+    const std::vector<DataColumn> &columns)
+{
+
+    CalculationsDataFrame frame;
+    frame.set_name(name);
+    *frame.mutable_datatimestamps() = timestamps;
+
+    for (const auto &column : columns)
+    {
+        *frame.add_datacolumns() = column;
+    }
+
+    return frame;
 }
 
-QueryAnnotationsRequest makeQueryAnnotationsByOwner(const std::string& owner_id) {
+// ========== Annotation Query Operations ==========
+
+std::vector<Annotation> AnnotationClient::QueryAllAnnotations()
+{
+    auto response = QueryAnnotations({}); // Empty criteria returns all
+    if (response.has_annotationsresult())
+    {
+        std::vector<Annotation> annotations;
+        for (const auto &ann : response.annotationsresult().annotations())
+        {
+            annotations.push_back(ann);
+        }
+        return annotations;
+    }
+    return {};
+}
+
+std::vector<Annotation> AnnotationClient::QueryAnnotationById(const std::string &annotation_id)
+{
+    std::vector<QueryAnnotationsCriterion> criteria;
+    criteria.push_back(CreateAnnotationIdCriterion(annotation_id));
+
+    auto response = QueryAnnotations(criteria);
+
+    if (response.has_annotationsresult())
+    {
+        std::vector<Annotation> annotations;
+        for (const auto &ann : response.annotationsresult().annotations())
+        {
+            annotations.push_back(ann);
+        }
+        return annotations;
+    }
+
+    return {};
+}
+
+std::vector<Annotation> AnnotationClient::QueryAnnotationsByOwner(const std::string &owner_id)
+{
+    std::vector<QueryAnnotationsCriterion> criteria;
+    criteria.push_back(CreateAnnotationOwnerCriterion(owner_id));
+
+    auto response = QueryAnnotations(criteria);
+
+    if (response.has_annotationsresult())
+    {
+        std::vector<Annotation> annotations;
+        for (const auto &ann : response.annotationsresult().annotations())
+        {
+            annotations.push_back(ann);
+        }
+        return annotations;
+    }
+
+    return {};
+}
+
+std::vector<Annotation> AnnotationClient::QueryAnnotationsByDataSet(const std::string &dataset_id)
+{
+    std::vector<QueryAnnotationsCriterion> criteria;
+    criteria.push_back(CreateAnnotationDataSetCriterion(dataset_id));
+
+    auto response = QueryAnnotations(criteria);
+
+    if (response.has_annotationsresult())
+    {
+        std::vector<Annotation> annotations;
+        for (const auto &ann : response.annotationsresult().annotations())
+        {
+            annotations.push_back(ann);
+        }
+        return annotations;
+    }
+
+    return {};
+}
+
+std::vector<Annotation> AnnotationClient::QueryAnnotationsByAnnotation(const std::string &annotation_id)
+{
+    std::vector<QueryAnnotationsCriterion> criteria;
+    criteria.push_back(CreateAnnotationAnnotationCriterion(annotation_id));
+
+    auto response = QueryAnnotations(criteria);
+
+    if (response.has_annotationsresult())
+    {
+        std::vector<Annotation> annotations;
+        for (const auto &ann : response.annotationsresult().annotations())
+        {
+            annotations.push_back(ann);
+        }
+        return annotations;
+    }
+
+    return {};
+}
+
+std::vector<Annotation> AnnotationClient::QueryAnnotationsByText(const std::string &search_text)
+{
+    std::vector<QueryAnnotationsCriterion> criteria;
+    criteria.push_back(CreateAnnotationTextCriterion(search_text));
+
+    auto response = QueryAnnotations(criteria);
+
+    if (response.has_annotationsresult())
+    {
+        std::vector<Annotation> annotations;
+        for (const auto &ann : response.annotationsresult().annotations())
+        {
+            annotations.push_back(ann);
+        }
+        return annotations;
+    }
+
+    return {};
+}
+
+std::vector<Annotation> AnnotationClient::QueryAnnotationsByTag(const std::string &tag)
+{
+    std::vector<QueryAnnotationsCriterion> criteria;
+    criteria.push_back(CreateAnnotationTagCriterion(tag));
+
+    auto response = QueryAnnotations(criteria);
+
+    if (response.has_annotationsresult())
+    {
+        std::vector<Annotation> annotations;
+        for (const auto &ann : response.annotationsresult().annotations())
+        {
+            annotations.push_back(ann);
+        }
+        return annotations;
+    }
+
+    return {};
+}
+
+std::vector<Annotation> AnnotationClient::QueryAnnotationsByAttribute(
+    const std::string &key, const std::string &value)
+{
+
+    std::vector<QueryAnnotationsCriterion> criteria;
+    criteria.push_back(CreateAnnotationAttributeCriterion(key, value));
+
+    auto response = QueryAnnotations(criteria);
+
+    if (response.has_annotationsresult())
+    {
+        std::vector<Annotation> annotations;
+        for (const auto &ann : response.annotationsresult().annotations())
+        {
+            annotations.push_back(ann);
+        }
+        return annotations;
+    }
+
+    return {};
+}
+
+QueryAnnotationsResponse AnnotationClient::QueryAnnotations(
+    const std::vector<QueryAnnotationsCriterion> &criteria)
+{
+
     QueryAnnotationsRequest request;
-    auto* criterion = request.add_criteria();
-    auto* ownerCriterion = criterion->mutable_ownercriterion();
-    ownerCriterion->set_ownerid(owner_id);
-    return request;
+    for (const auto &criterion : criteria)
+    {
+        *request.add_criteria() = criterion;
+    }
+
+    QueryAnnotationsResponse response;
+    grpc::ClientContext context;
+
+    auto deadline = std::chrono::system_clock::now() +
+                    std::chrono::seconds(pImpl->default_timeout_seconds);
+    context.set_deadline(deadline);
+
+    grpc::Status status = pImpl->stub->queryAnnotations(&context, request, &response);
+
+    pImpl->stats.annotations_queried++;
+
+    if (!status.ok())
+    {
+        pImpl->last_error = status.error_message();
+        pImpl->stats.errors++;
+
+        if (!response.has_exceptionalresult())
+        {
+            auto *exceptional = response.mutable_exceptionalresult();
+            exceptional->set_exceptionalresultstatus(
+                ExceptionalResult_ExceptionalResultStatus_RESULT_STATUS_ERROR);
+            exceptional->set_message(status.error_message());
+        }
+    }
+
+    return response;
 }
 
-QueryAnnotationsRequest makeQueryAnnotationsByDataSet(const std::string& dataset_id) {
-    QueryAnnotationsRequest request;
-    auto* criterion = request.add_criteria();
-    auto* datasetCriterion = criterion->mutable_datasetscriterion();
-    datasetCriterion->set_datasetid(dataset_id);
-    return request;
+QueryAnnotationsCriterion AnnotationClient::CreateAnnotationIdCriterion(const std::string &id)
+{
+    QueryAnnotationsCriterion criterion;
+    criterion.mutable_idcriterion()->set_id(id);
+    return criterion;
 }
 
-QueryAnnotationsRequest makeQueryAnnotationsByText(const std::string& text) {
-    QueryAnnotationsRequest request;
-    auto* criterion = request.add_criteria();
-    auto* textCriterion = criterion->mutable_textcriterion();
-    textCriterion->set_text(text);
-    return request;
+QueryAnnotationsCriterion AnnotationClient::CreateAnnotationOwnerCriterion(const std::string &owner_id)
+{
+    QueryAnnotationsCriterion criterion;
+    criterion.mutable_ownercriterion()->set_ownerid(owner_id);
+    return criterion;
 }
 
-QueryAnnotationsRequest makeQueryAnnotationsByTag(const std::string& tag) {
-    QueryAnnotationsRequest request;
-    auto* criterion = request.add_criteria();
-    auto* tagCriterion = criterion->mutable_tagscriterion();
-    tagCriterion->set_tagvalue(tag);
-    return request;
+QueryAnnotationsCriterion AnnotationClient::CreateAnnotationDataSetCriterion(const std::string &dataset_id)
+{
+    QueryAnnotationsCriterion criterion;
+    criterion.mutable_datasetscriterion()->set_datasetid(dataset_id);
+    return criterion;
 }
 
-QueryAnnotationsRequest makeQueryAnnotationsById(const std::string& annotation_id) {
-    QueryAnnotationsRequest request;
-    auto* criterion = request.add_criteria();
-    auto* idCriterion = criterion->mutable_idcriterion();
-    idCriterion->set_id(annotation_id);
-    return request;
+QueryAnnotationsCriterion AnnotationClient::CreateAnnotationAnnotationCriterion(const std::string &annotation_id)
+{
+    QueryAnnotationsCriterion criterion;
+    criterion.mutable_annotationscriterion()->set_annotationid(annotation_id);
+    return criterion;
 }
 
-ExportDataRequest makeExportDataRequest(const std::string& dataset_id, 
-                                       ExportDataRequest::ExportOutputFormat format) {
+QueryAnnotationsCriterion AnnotationClient::CreateAnnotationTextCriterion(const std::string &text)
+{
+    QueryAnnotationsCriterion criterion;
+    criterion.mutable_textcriterion()->set_text(text);
+    return criterion;
+}
+
+QueryAnnotationsCriterion AnnotationClient::CreateAnnotationTagCriterion(const std::string &tag)
+{
+    QueryAnnotationsCriterion criterion;
+    criterion.mutable_tagscriterion()->set_tagvalue(tag);
+    return criterion;
+}
+
+QueryAnnotationsCriterion AnnotationClient::CreateAnnotationAttributeCriterion(
+    const std::string &key, const std::string &value)
+{
+
+    QueryAnnotationsCriterion criterion;
+    auto *attr_criterion = criterion.mutable_attributescriterion();
+    attr_criterion->set_key(key);
+    attr_criterion->set_value(value);
+    return criterion;
+}
+
+// ========== Export Operations ==========
+
+std::optional<std::string> AnnotationClient::ExportDataSetToFile(
+    const std::string &dataset_id,
+    ExportOutputFormat format)
+{
+
+    auto response = ExportData(dataset_id, format);
+
+    if (response.has_exportdataresult())
+    {
+        pImpl->stats.exports_performed++;
+        return response.exportdataresult().filepath();
+    }
+
+    if (response.has_exceptionalresult())
+    {
+        pImpl->last_error = response.exceptionalresult().message();
+        pImpl->stats.errors++;
+    }
+
+    return std::nullopt;
+}
+
+std::optional<std::string> AnnotationClient::ExportDataSetToUrl(
+    const std::string &dataset_id,
+    ExportOutputFormat format)
+{
+
+    auto response = ExportData(dataset_id, format);
+
+    if (response.has_exportdataresult())
+    {
+        pImpl->stats.exports_performed++;
+        return response.exportdataresult().fileurl();
+    }
+
+    if (response.has_exceptionalresult())
+    {
+        pImpl->last_error = response.exceptionalresult().message();
+        pImpl->stats.errors++;
+    }
+
+    return std::nullopt;
+}
+
+ExportDataResponse AnnotationClient::ExportData(
+    const std::string &dataset_id,
+    ExportOutputFormat format)
+{
+
     ExportDataRequest request;
     request.set_datasetid(dataset_id);
     request.set_outputformat(format);
-    return request;
+
+    ExportDataResponse response;
+    grpc::ClientContext context;
+
+    // Export might take longer
+    auto deadline = std::chrono::system_clock::now() +
+                    std::chrono::seconds(pImpl->default_timeout_seconds * 3);
+    context.set_deadline(deadline);
+
+    grpc::Status status = pImpl->stub->exportData(&context, request, &response);
+
+    if (!status.ok())
+    {
+        pImpl->last_error = status.error_message();
+        pImpl->stats.errors++;
+
+        if (!response.has_exceptionalresult())
+        {
+            auto *exceptional = response.mutable_exceptionalresult();
+            exceptional->set_exceptionalresultstatus(
+                ExceptionalResult_ExceptionalResultStatus_RESULT_STATUS_ERROR);
+            exceptional->set_message(status.error_message());
+        }
+    }
+
+    return response;
 }
 
-// ===================== Utility Functions =====================
+// ========== Utility Methods ==========
 
-namespace AnnotationUtils {
-    TimeRange createTimeRange(uint64_t start_epoch_sec, uint64_t end_epoch_sec,
-                             uint64_t start_nano, uint64_t end_nano) {
-        return TimeRange(start_epoch_sec, start_nano, end_epoch_sec, end_nano);
+std::vector<std::string> AnnotationClient::ExtractPvNamesFromDataSet(const DataSet &dataset)
+{
+    std::vector<std::string> all_pvs;
+
+    for (const auto &block : dataset.datablocks())
+    {
+        for (int i = 0; i < block.pvnames_size(); i++)
+        {
+            all_pvs.push_back(block.pvnames(i));
+        }
     }
 
-    uint64_t getCurrentEpochSeconds() {
-        return std::chrono::system_clock::now().time_since_epoch() / std::chrono::seconds(1);
+    return all_pvs;
+}
+
+std::pair<Timestamp, Timestamp> AnnotationClient::ExtractTimeRangeFromDataSet(const DataSet &dataset)
+{
+    if (dataset.datablocks_size() == 0)
+    {
+        return {Timestamp(), Timestamp()};
     }
 
-    TimeRange createRecentTimeRange(uint64_t duration_seconds) {
-        uint64_t now = getCurrentEpochSeconds();
-        return TimeRange(now - duration_seconds, 0, now, 0);
+    Timestamp earliest = dataset.datablocks(0).begintime();
+    Timestamp latest = dataset.datablocks(0).endtime();
+
+    for (const auto &block : dataset.datablocks())
+    {
+        if (pImpl->common_client.TimestampToSeconds(block.begintime()) <
+            pImpl->common_client.TimestampToSeconds(earliest))
+        {
+            earliest = block.begintime();
+        }
+        if (pImpl->common_client.TimestampToSeconds(block.endtime()) >
+            pImpl->common_client.TimestampToSeconds(latest))
+        {
+            latest = block.endtime();
+        }
     }
+
+    return {earliest, latest};
+}
+
+bool AnnotationClient::ValidateDataSet(const DataSet &dataset)
+{
+    // Check required fields
+    if (dataset.name().empty() || dataset.ownerid().empty())
+    {
+        return false;
+    }
+
+    // Check that there's at least one data block
+    if (dataset.datablocks_size() == 0)
+    {
+        return false;
+    }
+
+    // Validate each data block
+    for (const auto &block : dataset.datablocks())
+    {
+        if (!block.has_begintime() || !block.has_endtime())
+        {
+            return false;
+        }
+        if (block.pvnames_size() == 0)
+        {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+bool AnnotationClient::ValidateAnnotationRequest(const CreateAnnotationRequest &request)
+{
+    // Check required fields
+    if (request.ownerid().empty() || request.name().empty())
+    {
+        return false;
+    }
+
+    // Check that there's at least one dataset
+    if (request.datasetids_size() == 0)
+    {
+        return false;
+    }
+
+    return true;
+}
+
+bool AnnotationClient::DataSetExists(const std::string &dataset_id)
+{
+    auto datasets = QueryDataSetById(dataset_id);
+    return !datasets.empty();
+}
+
+bool AnnotationClient::AnnotationExists(const std::string &annotation_id)
+{
+    auto annotations = QueryAnnotationById(annotation_id);
+    return !annotations.empty();
+}
+
+std::optional<DataSet> AnnotationClient::GetDataSetMetadata(const std::string &dataset_id)
+{
+    auto datasets = QueryDataSetById(dataset_id);
+    if (!datasets.empty())
+    {
+        return datasets[0];
+    }
+    return std::nullopt;
+}
+
+std::optional<Annotation> AnnotationClient::GetAnnotationMetadata(const std::string &annotation_id)
+{
+    auto annotations = QueryAnnotationById(annotation_id);
+    if (!annotations.empty())
+    {
+        return annotations[0];
+    }
+    return std::nullopt;
+}
+
+// ========== Connection and Error Management ==========
+
+bool AnnotationClient::IsConnected() const
+{
+    return pImpl->channel->GetState(false) == GRPC_CHANNEL_READY;
+}
+
+grpc_connectivity_state AnnotationClient::GetChannelState() const
+{
+    return pImpl->channel->GetState(false);
+}
+
+bool AnnotationClient::WaitForConnection(int timeout_seconds)
+{
+    auto deadline = std::chrono::system_clock::now() +
+                    std::chrono::seconds(timeout_seconds);
+    return pImpl->channel->WaitForConnected(deadline);
+}
+
+void AnnotationClient::SetDefaultTimeout(int seconds)
+{
+    pImpl->default_timeout_seconds = seconds;
+}
+
+int AnnotationClient::GetDefaultTimeout() const
+{
+    return pImpl->default_timeout_seconds;
+}
+
+std::string AnnotationClient::GetLastError() const
+{
+    return pImpl->last_error;
+}
+
+void AnnotationClient::ClearLastError()
+{
+    pImpl->last_error.clear();
+}
+
+AnnotationClient::ClientStats AnnotationClient::GetStats() const
+{
+    return pImpl->stats;
+}
+
+void AnnotationClient::ResetStats()
+{
+    pImpl->stats = ClientStats{};
+}
+
+CommonClient &AnnotationClient::GetCommonClient()
+{
+    return pImpl->common_client;
 }

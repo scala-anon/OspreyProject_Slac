@@ -4,260 +4,279 @@
 #include <string>
 #include <vector>
 #include <memory>
+#include <optional>
 #include <functional>
-#include <nlohmann/json.hpp>
+#include <future>
+#include <map>
 #include <grpcpp/grpcpp.h>
-#include "common.pb.h"
+
+#include "common_client.hpp"  // Use our common client for shared types
 #include "query.pb.h"
 #include "query.grpc.pb.h"
 
-using Timestamp = ::Timestamp;
-using Attribute = ::Attribute;
-using DataColumn = ::DataColumn;
-using DataValue = ::DataValue;
-using QueryDataRequest = dp::service::query::QueryDataRequest;
-using QueryDataResponse = dp::service::query::QueryDataResponse;
-using QueryTableRequest = dp::service::query::QueryTableRequest;
-using QueryTableResponse = dp::service::query::QueryTableResponse;
-using QueryPvMetadataRequest = dp::service::query::QueryPvMetadataRequest;
-using QueryPvMetadataResponse = dp::service::query::QueryPvMetadataResponse;
-using QueryProvidersRequest = dp::service::query::QueryProvidersRequest;
-using QueryProvidersResponse = dp::service::query::QueryProvidersResponse;
-using QueryProviderMetadataRequest = dp::service::query::QueryProviderMetadataRequest;
-using QueryProviderMetadataResponse = dp::service::query::QueryProviderMetadataResponse;
+// Query-specific type aliases
+using QueryDataRequest = ::dp::service::query::QueryDataRequest;
+using QuerySpec = ::dp::service::query::QueryDataRequest::QuerySpec;
+using CursorOperation = ::dp::service::query::QueryDataRequest::CursorOperation;
+using CursorOperationType = ::dp::service::query::QueryDataRequest::CursorOperation::CursorOperationType;
 
-// Forward declarations
-Timestamp makeTimestamp(uint64_t epochSeconds, uint64_t nanoseconds);
+using QueryDataResponse = ::dp::service::query::QueryDataResponse;
+using QueryData = ::dp::service::query::QueryDataResponse::QueryData;
+using DataBucket = ::dp::service::query::QueryDataResponse::QueryData::DataBucket;
 
-// Configuration structure
-struct QueryClientConfig {
-    std::string server_address = "localhost:50052";
-    int connection_timeout_seconds = 5;
-    int max_message_size_mb = 64;
-    bool enable_spatial_queries = true;
-    std::string dictionaries_path = "config/dictionaries/";
-    
-    static QueryClientConfig fromConfigFile(const std::string& config_path);
-    static QueryClientConfig fromJson(const nlohmann::json& config);
-};
+using QueryTableRequest = ::dp::service::query::QueryTableRequest;
+using TableResultFormat = ::dp::service::query::QueryTableRequest::TableResultFormat;
+using QueryTableResponse = ::dp::service::query::QueryTableResponse;
+using TableResult = ::dp::service::query::QueryTableResponse::TableResult;
+using ColumnTable = ::dp::service::query::QueryTableResponse::ColumnTable;
+using RowMapTable = ::dp::service::query::QueryTableResponse::RowMapTable;
+using DataRow = ::dp::service::query::QueryTableResponse::RowMapTable::DataRow;
 
-// Spatial query parameters
-struct SpatialQueryParams {
-    std::string beam_path;
-    std::string area;
-    std::vector<std::string> areas;
-    std::string device_class;
-    std::vector<double> z_range; // [min_z, max_z]
-    int area_sequence_min = -1;
-    int area_sequence_max = -1;
-    
-    bool isEmpty() const {
-        return beam_path.empty() && area.empty() && areas.empty() && 
-               device_class.empty() && z_range.empty() && 
-               area_sequence_min == -1 && area_sequence_max == -1;
-    }
-};
+using QueryPvMetadataRequest = ::dp::service::query::QueryPvMetadataRequest;
+using QueryPvMetadataResponse = ::dp::service::query::QueryPvMetadataResponse;
+using PvMetadataResult = ::dp::service::query::QueryPvMetadataResponse::MetadataResult;
+using PvInfo = ::dp::service::query::QueryPvMetadataResponse::MetadataResult::PvInfo;
 
-// Time range helper
-struct TimeRange {
-    uint64_t start_epoch_sec;
-    uint64_t start_nano;
-    uint64_t end_epoch_sec;
-    uint64_t end_nano;
-    
-    TimeRange(uint64_t start_sec, uint64_t start_ns, uint64_t end_sec, uint64_t end_ns)
-        : start_epoch_sec(start_sec), start_nano(start_ns), 
-          end_epoch_sec(end_sec), end_nano(end_ns) {}
-    
-    Timestamp getStartTimestamp() const;
-    Timestamp getEndTimestamp() const;
-};
+using PvNameList = ::dp::service::query::PvNameList;
+using PvNamePattern = ::dp::service::query::PvNamePattern;
 
-// Query result wrapper
-struct QueryResult {
-    bool success = false;
-    std::string error_message;
-    size_t total_buckets = 0;
-    size_t total_data_points = 0;
-    double processing_time_seconds = 0.0;
-    std::vector<std::string> pv_names_found;
-    std::vector<QueryDataResponse> responses;
-    
-    void addPvName(const std::string& pv_name) {
-        if (std::find(pv_names_found.begin(), pv_names_found.end(), pv_name) == pv_names_found.end()) {
-            pv_names_found.push_back(pv_name);
-        }
-    }
-    
-    size_t getTotalDataPoints() const {
-        size_t total = 0;
-        for (const auto& response : responses) {
-            if (response.has_querydata()) {
-                for (const auto& bucket : response.querydata().databuckets()) {
-                    if (bucket.has_datacolumn()) {
-                        total += bucket.datacolumn().datavalues_size();
-                    }
-                }
-            }
-        }
-        return total;
-    }
-};
+using QueryProvidersRequest = ::dp::service::query::QueryProvidersRequest;
+using ProviderCriterion = ::dp::service::query::QueryProvidersRequest::Criterion;
+using QueryProvidersResponse = ::dp::service::query::QueryProvidersResponse;
+using ProvidersResult = ::dp::service::query::QueryProvidersResponse::ProvidersResult;
+using ProviderInfo = ::dp::service::query::QueryProvidersResponse::ProvidersResult::ProviderInfo;
 
-// Forward declaration
-class SpatialQueryEngine;
+using QueryProviderMetadataRequest = ::dp::service::query::QueryProviderMetadataRequest;
+using QueryProviderMetadataResponse = ::dp::service::query::QueryProviderMetadataResponse;
+using ProviderMetadataResult = ::dp::service::query::QueryProviderMetadataResponse::MetadataResult;
+using ProviderMetadata = ::dp::service::query::QueryProviderMetadataResponse::MetadataResult::ProviderMetadata;
 
-// Progress callback for streaming queries
-using QueryProgressCallback = std::function<void(size_t buckets_processed, const std::string& current_pv)>;
+using DpQueryService = ::dp::service::query::DpQueryService;
 
-// Main QueryClient class
 class QueryClient {
 public:
-    explicit QueryClient(const QueryClientConfig& config);
-    explicit QueryClient(const std::string& server_address = "localhost:50052");
-    explicit QueryClient(const std::string& config_path, bool is_config_file);
+    // Constructor with channel
+    explicit QueryClient(std::shared_ptr<grpc::Channel> channel);
+    
+    // Constructor with address
+    explicit QueryClient(const std::string& server_address);
     
     ~QueryClient();
 
-    // Basic query methods (existing API)
-    QueryDataResponse queryData(const QueryDataRequest& request);
-    QueryTableResponse queryTable(const QueryTableRequest& request);
-    QueryPvMetadataResponse queryPvMetadata(const QueryPvMetadataRequest& request);
-    QueryProvidersResponse queryProviders(const QueryProvidersRequest& request);
-    QueryProviderMetadataResponse queryProviderMetadata(const QueryProviderMetadataRequest& request);
-    std::vector<QueryDataResponse> queryDataStream(const QueryDataRequest& request);
-
-    // Spatial-aware query methods (new enhanced API)
-    QueryResult queryByArea(const std::string& area, const TimeRange& time_range, 
-                           const std::vector<std::string>& pv_patterns = {});
+    // ========== Time Series Data Query (Unary) ==========
     
-    QueryResult queryByBeamPath(const std::string& beam_path, const TimeRange& time_range,
-                                const std::vector<std::string>& pv_patterns = {});
+    // Simple query returning all data
+    std::vector<DataBucket> QueryData(
+        const Timestamp& begin_time,
+        const Timestamp& end_time,
+        const std::vector<std::string>& pv_names,
+        bool use_serialized = false);
     
-    QueryResult queryByDeviceClass(const std::string& device_class, const TimeRange& time_range,
-                                  const std::vector<std::string>& pv_patterns = {});
+    // Query with full response
+    QueryDataResponse QueryDataWithResponse(
+        const Timestamp& begin_time,
+        const Timestamp& end_time,
+        const std::vector<std::string>& pv_names,
+        bool use_serialized = false);
     
-    QueryResult queryByZRange(double min_z, double max_z, const TimeRange& time_range,
-                             const std::vector<std::string>& pv_patterns = {});
+    // Query with QuerySpec
+    QueryDataResponse QueryDataWithSpec(const QuerySpec& spec);
     
-    QueryResult queryBySequenceRange(const std::string& beam_path, int min_sequence, int max_sequence,
-                                    const TimeRange& time_range, const std::vector<std::string>& pv_patterns = {});
+    // Helper to create QuerySpec
+    QuerySpec CreateQuerySpec(
+        const Timestamp& begin_time,
+        const Timestamp& end_time,
+        const std::vector<std::string>& pv_names,
+        bool use_serialized = false);
     
-    // Advanced spatial query with multiple criteria
-    QueryResult spatialQuery(const SpatialQueryParams& spatial_params, const TimeRange& time_range,
-                            const std::vector<std::string>& pv_patterns = {});
-
-    // PV discovery methods
-    std::vector<std::string> findPvsByArea(const std::string& area, const std::string& pattern = ".*");
-    std::vector<std::string> findPvsByBeamPath(const std::string& beam_path, const std::string& pattern = ".*");
-    std::vector<std::string> findPvsByDeviceClass(const std::string& device_class, const std::string& pattern = ".*");
+    // ========== Time Series Data Query (Server Streaming) ==========
     
-    // Metadata queries with spatial context
-    std::vector<std::string> getAvailableAreas();
-    std::vector<std::string> getAvailableBeamPaths();
-    std::vector<std::string> getAvailableDeviceClasses();
-    std::vector<std::string> getAreasInBeamPath(const std::string& beam_path);
+    class StreamQuerySession {
+    public:
+        StreamQuerySession(
+            std::shared_ptr<grpc::ClientReader<QueryDataResponse>> reader,
+            std::shared_ptr<grpc::ClientContext> context);
+        
+        // Read next response
+        std::optional<QueryDataResponse> ReadNext();
+        
+        // Read all remaining responses
+        std::vector<QueryDataResponse> ReadAll();
+        
+        // Extract all data buckets
+        std::vector<DataBucket> ReadAllDataBuckets();
+        
+        // Cancel the stream
+        void Cancel();
+        
+        // Check if stream is done
+        bool IsDone() const;
+        
+    private:
+        class Impl;
+        std::unique_ptr<Impl> pImpl;
+    };
     
-    // Configuration and monitoring
-    const QueryClientConfig& getConfig() const { return config_; }
-    void updateConfig(const QueryClientConfig& config);
-    void setProgressCallback(QueryProgressCallback callback) { progress_callback_ = callback; }
+    std::unique_ptr<StreamQuerySession> QueryDataStream(
+        const Timestamp& begin_time,
+        const Timestamp& end_time,
+        const std::vector<std::string>& pv_names,
+        bool use_serialized = false);
     
-    // Spatial query control
-    void enableSpatialQueries(bool enable = true);
-    bool isSpatialQueriesEnabled() const;
+    // ========== Time Series Data Query (Bidirectional Streaming) ==========
     
-    // Connection management
-    bool isConnected() const;
-    void reconnect();
-
+    class BidiQuerySession {
+    public:
+        BidiQuerySession(
+            std::shared_ptr<grpc::ClientReaderWriter<QueryDataRequest, QueryDataResponse>> stream,
+            std::shared_ptr<grpc::ClientContext> context);
+        
+        // Send initial query
+        bool SendQuery(const QuerySpec& spec);
+        
+        // Send cursor operation to get next batch
+        bool RequestNext();
+        
+        // Read response
+        std::optional<QueryDataResponse> ReadResponse();
+        
+        // Combined request next and read
+        std::optional<QueryDataResponse> GetNext();
+        
+        // Close the sending side
+        void CloseSending();
+        
+        // Cancel the stream
+        void Cancel();
+        
+    private:
+        class Impl;
+        std::unique_ptr<Impl> pImpl;
+    };
+    
+    std::unique_ptr<BidiQuerySession> QueryDataBidiStream();
+    
+    // ========== Tabular Query ==========
+    
+    // Query returning column-oriented table
+    std::optional<ColumnTable> QueryTableColumns(
+        const Timestamp& begin_time,
+        const Timestamp& end_time,
+        const std::vector<std::string>& pv_names);
+    
+    // Query returning row-oriented table
+    std::optional<RowMapTable> QueryTableRows(
+        const Timestamp& begin_time,
+        const Timestamp& end_time,
+        const std::vector<std::string>& pv_names);
+    
+    // Query with pattern matching
+    QueryTableResponse QueryTableWithPattern(
+        const Timestamp& begin_time,
+        const Timestamp& end_time,
+        const std::string& pv_pattern,
+        TableResultFormat format = TableResultFormat::QueryTableRequest_TableResultFormat_TABLE_FORMAT_COLUMN);
+    
+    // Query with full control
+    QueryTableResponse QueryTable(const QueryTableRequest& request);
+    
+    // ========== PV Metadata Query ==========
+    
+    // Query metadata for specific PVs
+    std::vector<PvInfo> QueryPvMetadata(const std::vector<std::string>& pv_names);
+    
+    // Query metadata with pattern
+    std::vector<PvInfo> QueryPvMetadataWithPattern(const std::string& pattern);
+    
+    // Query with full response
+    QueryPvMetadataResponse QueryPvMetadataWithResponse(const QueryPvMetadataRequest& request);
+    
+    // ========== Provider Query ==========
+    
+    // Query all providers
+    std::vector<ProviderInfo> QueryAllProviders();
+    
+    // Query providers by ID
+    std::vector<ProviderInfo> QueryProviderById(const std::string& provider_id);
+    
+    // Query providers by text search
+    std::vector<ProviderInfo> QueryProvidersByText(const std::string& search_text);
+    
+    // Query providers by tag
+    std::vector<ProviderInfo> QueryProvidersByTag(const std::string& tag);
+    
+    // Query providers by attribute
+    std::vector<ProviderInfo> QueryProvidersByAttribute(
+        const std::string& key, 
+        const std::string& value);
+    
+    // Query with multiple criteria
+    QueryProvidersResponse QueryProviders(const std::vector<ProviderCriterion>& criteria);
+    
+    // Helper methods to create criteria
+    ProviderCriterion CreateIdCriterion(const std::string& id);
+    ProviderCriterion CreateTextCriterion(const std::string& text);
+    ProviderCriterion CreateTagsCriterion(const std::string& tag);
+    ProviderCriterion CreateAttributesCriterion(const std::string& key, const std::string& value);
+    
+    // ========== Provider Metadata Query ==========
+    
+    // Query provider metadata
+    std::optional<ProviderMetadata> QueryProviderMetadata(const std::string& provider_id);
+    
+    // Query with full response
+    QueryProviderMetadataResponse QueryProviderMetadataWithResponse(const std::string& provider_id);
+    
+    // ========== Utility Methods ==========
+    
+    // Extract data values from buckets
+    std::vector<DataValue> ExtractDataValues(const std::vector<DataBucket>& buckets);
+    
+    // Extract timestamps from buckets
+    std::vector<Timestamp> ExtractTimestamps(const std::vector<DataBucket>& buckets);
+    
+    // Convert column table to map
+    std::map<std::string, std::vector<DataValue>> ColumnTableToMap(const ColumnTable& table);
+    
+    // Convert row table to vector of maps
+    std::vector<std::map<std::string, DataValue>> RowTableToVector(const RowMapTable& table);
+    
+    // Deserialize data bucket if using serialized columns
+    DataColumn DeserializeDataBucket(const DataBucket& bucket);
+    
+    // Check connection
+    bool IsConnected() const;
+    grpc_connectivity_state GetChannelState() const;
+    bool WaitForConnection(int timeout_seconds = 10);
+    
+    // Timeout management
+    void SetDefaultTimeout(int seconds);
+    int GetDefaultTimeout() const;
+    
+    // Error handling
+    std::string GetLastError() const;
+    void ClearLastError();
+    
+    // Statistics
+    struct ClientStats {
+        uint64_t queries_executed = 0;
+        uint64_t stream_queries = 0;
+        uint64_t table_queries = 0;
+        uint64_t metadata_queries = 0;
+        uint64_t provider_queries = 0;
+        uint64_t errors = 0;
+        uint64_t total_buckets_received = 0;
+    };
+    
+    ClientStats GetStats() const;
+    void ResetStats();
+    
+    // Access to common client
+    CommonClient& GetCommonClient();
+    
 private:
-    QueryClientConfig config_;
-    std::unique_ptr<dp::service::query::DpQueryService::Stub> stub_;
-    std::unique_ptr<SpatialQueryEngine> spatial_engine_;
-    
-    QueryProgressCallback progress_callback_;
-    bool spatial_queries_enabled_;
-    mutable std::string last_error_;
-    
-    // Internal methods
-    void initializeConnection();
-    void initializeSpatialEngine();
-    std::vector<std::string> expandPvPatterns(const std::vector<std::string>& patterns, 
-                                             const SpatialQueryParams& spatial_params);
-    QueryDataRequest createQueryRequest(const std::vector<std::string>& pv_names, 
-                                       const TimeRange& time_range, bool use_serialized = false);
-    QueryResult processQueryResponses(const std::vector<QueryDataResponse>& responses, 
-                                     double processing_time);
-    void notifyProgress(size_t buckets_processed, const std::string& current_pv) const;
+    class Impl;
+    std::unique_ptr<Impl> pImpl;
 };
-
-// Spatial Query Engine for PV discovery and filtering
-class SpatialQueryEngine {
-public:
-    explicit SpatialQueryEngine(const std::string& dictionaries_path);
-    
-    bool loadDictionaries();
-    std::vector<std::string> findPvsByArea(const std::string& area, const std::string& pattern = ".*") const;
-    std::vector<std::string> findPvsByBeamPath(const std::string& beam_path, const std::string& pattern = ".*") const;
-    std::vector<std::string> findPvsByDeviceClass(const std::string& device_class, const std::string& pattern = ".*") const;
-    std::vector<std::string> findPvsBySpatialParams(const SpatialQueryParams& params, const std::string& pattern = ".*") const;
-    
-    std::vector<std::string> getAvailableAreas() const;
-    std::vector<std::string> getAvailableBeamPaths() const;
-    std::vector<std::string> getAvailableDeviceClasses() const;
-    std::vector<std::string> getAreasInBeamPath(const std::string& beam_path) const;
-    
-    bool isLoaded() const { return dictionaries_loaded_; }
-
-private:
-    std::string dictionaries_path_;
-    bool dictionaries_loaded_ = false;
-    
-    // Dictionary data structures
-    nlohmann::json beamline_boundaries_;
-    nlohmann::json device_classifications_;
-    nlohmann::json coordinate_systems_;
-    nlohmann::json epics_records_;
-    
-    // Internal methods
-    std::vector<std::string> generatePvPatterns(const std::string& area, const std::string& device_pattern = ".*") const;
-    std::vector<std::string> getDevicesInArea(const std::string& area) const;
-    std::vector<std::string> getDevicesByClass(const std::string& device_class) const;
-    bool matchesZRange(const std::string& area, double min_z, double max_z) const;
-    bool matchesSequenceRange(const std::string& area, const std::string& beam_path, 
-                             int min_sequence, int max_sequence) const;
-};
-
-// Helper function declarations
-Timestamp makeTimestamp(uint64_t epochSeconds, uint64_t nanoseconds);
-QueryDataRequest makeQueryDataRequest(const std::vector<std::string>& pvNames, const Timestamp& beginTime, 
-                                     const Timestamp& endTime, bool useSerializedDataColumns = false);
-QueryTableRequest makeQueryTableRequest(const std::vector<std::string>& pvNames, const Timestamp& beginTime, 
-                                       const Timestamp& endTime, 
-                                       dp::service::query::QueryTableRequest::TableResultFormat format);
-QueryPvMetadataRequest makeQueryPvMetadataRequest(const std::vector<std::string>& pvNames);
-QueryPvMetadataRequest makeQueryPvMetadataRequestWithPattern(const std::string& pattern);
-QueryProvidersRequest makeQueryProvidersRequest(const std::string& textSearch = "");
-QueryProviderMetadataRequest makeQueryProviderMetadataRequest(const std::string& providerId);
-
-// Utility functions for common query patterns
-namespace QueryUtils {
-    TimeRange createTimeRange(uint64_t start_epoch_sec, uint64_t end_epoch_sec, 
-                             uint64_t start_nano = 0, uint64_t end_nano = 0);
-    TimeRange createTimeRangeFromDuration(uint64_t start_epoch_sec, uint64_t duration_seconds,
-                                         uint64_t start_nano = 0);
-    uint64_t getCurrentEpochSeconds();
-    TimeRange createRecentTimeRange(uint64_t duration_seconds); // Query last N seconds
-    
-    SpatialQueryParams createAreaQuery(const std::string& area);
-    SpatialQueryParams createBeamPathQuery(const std::string& beam_path);
-    SpatialQueryParams createDeviceClassQuery(const std::string& device_class);
-    SpatialQueryParams createZRangeQuery(double min_z, double max_z);
-    SpatialQueryParams createSequenceQuery(const std::string& beam_path, int min_seq, int max_seq);
-    
-    // Combine multiple spatial criteria
-    SpatialQueryParams combineSpatialParams(const SpatialQueryParams& base, const SpatialQueryParams& additional);
-}
 
 #endif // QUERY_CLIENT_HPP

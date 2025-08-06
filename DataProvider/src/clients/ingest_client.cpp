@@ -1,370 +1,722 @@
 #include "ingest_client.hpp"
-#include <grpcpp/grpcpp.h>
-#include <iostream>
-#include <fstream>
+#include <thread>
 #include <chrono>
-#include <future>
-#include <algorithm>
+#include <atomic>
+#include <sstream>
 
-using json = nlohmann::json;
+// ========== StreamIngestionSession Implementation ==========
 
-// ===================== IngestClientConfig Implementation =====================
-
-IngestClientConfig IngestClientConfig::fromConfigFile(const std::string& config_path) {
-    IngestClientConfig config;
-    try {
-        std::ifstream file(config_path);
-        if (!file.is_open()) {
-            return config;
-        }
-        json j;
-        file >> j;
-        return fromJson(j);
-    } catch (const std::exception&) {
-        return config;
-    }
-}
-
-IngestClientConfig IngestClientConfig::fromJson(const nlohmann::json& config) {
-    IngestClientConfig result;
+class IngestionClient::StreamIngestionSession::Impl {
+public:
+    std::shared_ptr<grpc::ClientWriter<IngestDataRequest>> writer;
+    std::shared_ptr<grpc::ClientContext> context;
+    std::vector<std::string> sent_request_ids;
     
-    if (config.contains("server_connections")) {
-        const auto& conn = config["server_connections"];
-        if (conn.contains("ingestion_server")) {
-            result.server_address = conn["ingestion_server"];
-        }
-        if (conn.contains("connection_timeout_seconds")) {
-            result.connection_timeout_seconds = conn["connection_timeout_seconds"];
-        }
-        if (conn.contains("max_message_size_mb")) {
-            result.max_message_size_mb = conn["max_message_size_mb"];
+    Impl(std::shared_ptr<grpc::ClientWriter<IngestDataRequest>> w,
+         std::shared_ptr<grpc::ClientContext> ctx)
+        : writer(w), context(ctx) {}
+};
+
+IngestionClient::StreamIngestionSession::StreamIngestionSession(
+    std::shared_ptr<grpc::ClientWriter<IngestDataRequest>> writer,
+    std::shared_ptr<grpc::ClientContext> context)
+    : pImpl(std::make_unique<Impl>(writer, context)) {}
+
+bool IngestionClient::StreamIngestionSession::SendData(const IngestDataRequest& request) {
+    if (!pImpl->writer) return false;
+    
+    bool success = pImpl->writer->Write(request);
+    if (success) {
+        pImpl->sent_request_ids.push_back(request.clientrequestid());
+    }
+    return success;
+}
+
+bool IngestionClient::StreamIngestionSession::SendData(
+    const std::string& provider_id,
+    const std::string& client_request_id,
+    const IngestionDataFrame& data_frame) {
+    
+    IngestDataRequest request;
+    request.set_providerid(provider_id);
+    request.set_clientrequestid(client_request_id);
+    *request.mutable_ingestiondataframe() = data_frame;
+    
+    return SendData(request);
+}
+
+IngestDataStreamResponse IngestionClient::StreamIngestionSession::Finish() {
+    IngestDataStreamResponse response;
+    
+    if (pImpl->writer) {
+        pImpl->writer->WritesDone();
+        grpc::Status status = pImpl->writer->Finish();
+        
+        // Response should be populated by the server
+        // If not, we create a basic response
+        if (!status.ok()) {
+            auto* exceptional = response.mutable_exceptionalresult();
+            exceptional->set_exceptionalresultstatus(
+                ExceptionalResult_ExceptionalResultStatus_RESULT_STATUS_ERROR);
+            exceptional->set_message(status.error_message());
         }
     }
     
-    if (config.contains("ingestion_settings")) {
-        const auto& ingest = config["ingestion_settings"];
-        if (ingest.contains("default_batch_size")) {
-            result.default_batch_size = ingest["default_batch_size"];
-        }
-        if (ingest.contains("max_batch_size")) {
-            result.max_batch_size = ingest["max_batch_size"];
-        }
-        if (ingest.contains("streaming_preferred")) {
-            result.streaming_preferred = ingest["streaming_preferred"];
-        }
-        if (ingest.contains("retry_attempts")) {
-            result.retry_attempts = ingest["retry_attempts"];
-        }
-        if (ingest.contains("retry_delay_ms")) {
-            result.retry_delay_ms = ingest["retry_delay_ms"];
-        }
-        if (ingest.contains("enable_progress_monitoring")) {
-            result.enable_progress_monitoring = ingest["enable_progress_monitoring"];
-        }
-    }
-    
-    return result;
-}
-
-// ===================== IngestClient Implementation =====================
-
-IngestClient::IngestClient(const IngestClientConfig& config) 
-    : config_(config), spatial_enrichment_enabled_(false) {
-    initializeConnection();
-}
-
-IngestClient::IngestClient(const std::string& config_file_path) 
-    : IngestClient(IngestClientConfig::fromConfigFile(config_file_path)) {}
-
-IngestClient::~IngestClient() = default;
-
-void IngestClient::initializeConnection() {
-    grpc::ChannelArguments args;
-    args.SetMaxReceiveMessageSize(config_.max_message_size_mb * 1024 * 1024);
-    args.SetMaxSendMessageSize(config_.max_message_size_mb * 1024 * 1024);
-
-    auto channel = grpc::CreateCustomChannel(config_.server_address, grpc::InsecureChannelCredentials(), args);
-
-    if (!channel->WaitForConnected(std::chrono::system_clock::now() + std::chrono::seconds(config_.connection_timeout_seconds))) {
-        throw std::runtime_error("Failed to connect to server at " + config_.server_address);
-    }
-
-    stub_ = dp::service::ingestion::DpIngestionService::NewStub(channel);
-}
-
-RegisterProviderResponse IngestClient::registerProvider(const RegisterProviderRequest& request) {
-    RegisterProviderResponse response;
-    grpc::ClientContext context;
-    grpc::Status status = stub_->registerProvider(&context, request, &response);
-
-    if (!status.ok()) {
-        throw std::runtime_error("RegisterProvider RPC failed: " + status.error_message());
-    }
     return response;
 }
 
-RegisterProviderResponse IngestClient::registerProvider(const std::string& name,
-                                                       const std::vector<Attribute>& attributes,
-                                                       const std::vector<std::string>& tags) {
-    RegisterProviderRequest request;
-    request.set_providername(name);
+void IngestionClient::StreamIngestionSession::Cancel() {
+    if (pImpl->context) {
+        pImpl->context->TryCancel();
+    }
+}
+
+// ========== BidiStreamIngestionSession Implementation ==========
+
+class IngestionClient::BidiStreamIngestionSession::Impl {
+public:
+    std::shared_ptr<grpc::ClientReaderWriter<IngestDataRequest, IngestDataResponse>> stream;
+    std::shared_ptr<grpc::ClientContext> context;
+    std::atomic<bool> sending_closed{false};
     
-    for (const auto& attr : attributes) {
-        *request.add_attributes() = attr;
+    Impl(std::shared_ptr<grpc::ClientReaderWriter<IngestDataRequest, IngestDataResponse>> s,
+         std::shared_ptr<grpc::ClientContext> ctx)
+        : stream(s), context(ctx) {}
+};
+
+IngestionClient::BidiStreamIngestionSession::BidiStreamIngestionSession(
+    std::shared_ptr<grpc::ClientReaderWriter<IngestDataRequest, IngestDataResponse>> stream,
+    std::shared_ptr<grpc::ClientContext> context)
+    : pImpl(std::make_unique<Impl>(stream, context)) {}
+
+bool IngestionClient::BidiStreamIngestionSession::SendData(const IngestDataRequest& request) {
+    if (!pImpl->stream || pImpl->sending_closed) return false;
+    return pImpl->stream->Write(request);
+}
+
+std::optional<IngestDataResponse> IngestionClient::BidiStreamIngestionSession::ReadResponse() {
+    if (!pImpl->stream) return std::nullopt;
+    
+    IngestDataResponse response;
+    if (pImpl->stream->Read(&response)) {
+        return response;
+    }
+    return std::nullopt;
+}
+
+bool IngestionClient::BidiStreamIngestionSession::WaitForResponse(
+    IngestDataResponse& response, int timeout_ms) {
+    // Note: gRPC doesn't have built-in timeout for Read, so this is a simplified version
+    // In production, you might want to use async operations with deadlines
+    if (!pImpl->stream) return false;
+    return pImpl->stream->Read(&response);
+}
+
+void IngestionClient::BidiStreamIngestionSession::CloseSending() {
+    if (pImpl->stream && !pImpl->sending_closed) {
+        pImpl->stream->WritesDone();
+        pImpl->sending_closed = true;
+    }
+}
+
+std::vector<IngestDataResponse> IngestionClient::BidiStreamIngestionSession::ReadAllResponses() {
+    std::vector<IngestDataResponse> responses;
+    IngestDataResponse response;
+    
+    while (pImpl->stream && pImpl->stream->Read(&response)) {
+        responses.push_back(response);
+    }
+    
+    return responses;
+}
+
+// ========== SubscriptionSession Implementation ==========
+
+class IngestionClient::SubscriptionSession::Impl {
+public:
+    std::shared_ptr<grpc::ClientReaderWriter<SubscribeDataRequest, SubscribeDataResponse>> stream;
+    std::shared_ptr<grpc::ClientContext> context;
+    std::atomic<bool> active{true};
+    std::atomic<bool> async_reading{false};
+    std::thread async_reader;
+    
+    Impl(std::shared_ptr<grpc::ClientReaderWriter<SubscribeDataRequest, SubscribeDataResponse>> s,
+         std::shared_ptr<grpc::ClientContext> ctx)
+        : stream(s), context(ctx) {}
+    
+    ~Impl() {
+        StopAsyncReading();
+    }
+    
+    void StopAsyncReading() {
+        async_reading = false;
+        if (async_reader.joinable()) {
+            async_reader.join();
+        }
+    }
+};
+
+IngestionClient::SubscriptionSession::SubscriptionSession(
+    std::shared_ptr<grpc::ClientReaderWriter<SubscribeDataRequest, SubscribeDataResponse>> stream,
+    std::shared_ptr<grpc::ClientContext> context)
+    : pImpl(std::make_unique<Impl>(stream, context)) {}
+
+bool IngestionClient::SubscriptionSession::Subscribe(const std::vector<std::string>& pv_names) {
+    if (!pImpl->stream || !pImpl->active) return false;
+    
+    SubscribeDataRequest request;
+    auto* new_sub = request.mutable_newsubscription();
+    for (const auto& pv : pv_names) {
+        new_sub->add_pvnames(pv);
+    }
+    
+    return pImpl->stream->Write(request);
+}
+
+bool IngestionClient::SubscriptionSession::CancelSubscription() {
+    if (!pImpl->stream || !pImpl->active) return false;
+    
+    SubscribeDataRequest request;
+    request.mutable_cancelsubscription();  // Creates empty CancelSubscription message
+    
+    bool result = pImpl->stream->Write(request);
+    pImpl->active = false;
+    return result;
+}
+
+std::optional<SubscribeDataResponse> IngestionClient::SubscriptionSession::ReadResponse() {
+    if (!pImpl->stream || !pImpl->active) return std::nullopt;
+    
+    SubscribeDataResponse response;
+    if (pImpl->stream->Read(&response)) {
+        return response;
+    }
+    return std::nullopt;
+}
+
+void IngestionClient::SubscriptionSession::StartAsyncReading(
+    DataCallback on_data, ErrorCallback on_error) {
+    
+    if (pImpl->async_reading) return;
+    
+    pImpl->async_reading = true;
+    pImpl->async_reader = std::thread([this, on_data, on_error]() {
+        while (pImpl->async_reading && pImpl->active) {
+            auto response = ReadResponse();
+            if (response.has_value()) {
+                if (response->has_subscribedataresult() && on_data) {
+                    on_data(response->subscribedataresult());
+                } else if (response->has_exceptionalresult() && on_error) {
+                    on_error(response->exceptionalresult());
+                }
+            } else {
+                // Stream ended or error
+                pImpl->active = false;
+                break;
+            }
+        }
+    });
+}
+
+void IngestionClient::SubscriptionSession::StopAsyncReading() {
+    pImpl->StopAsyncReading();
+}
+
+bool IngestionClient::SubscriptionSession::IsActive() const {
+    return pImpl->active;
+}
+
+// ========== IngestionClient Implementation ==========
+
+class IngestionClient::Impl {
+public:
+    std::shared_ptr<grpc::Channel> channel;
+    std::unique_ptr<DpIngestionService::Stub> stub;
+    CommonClient common_client;
+    
+    int default_timeout_seconds = 30;
+    std::string last_error;
+    ClientStats stats;
+    
+    Impl(std::shared_ptr<grpc::Channel> ch) 
+        : channel(ch), stub(DpIngestionService::NewStub(ch)) {}
+};
+
+IngestionClient::IngestionClient(std::shared_ptr<grpc::Channel> channel)
+    : pImpl(std::make_unique<Impl>(channel)) {}
+
+IngestionClient::IngestionClient(const std::string& server_address)
+    : pImpl(std::make_unique<Impl>(
+        grpc::CreateChannel(server_address, grpc::InsecureChannelCredentials()))) {}
+
+IngestionClient::~IngestionClient() = default;
+
+// ========== Provider Registration ==========
+
+std::optional<std::string> IngestionClient::RegisterProvider(
+    const std::string& provider_name,
+    const std::string& description,
+    const std::vector<std::string>& tags,
+    const std::vector<Attribute>& attributes) {
+    
+    auto response = RegisterProviderWithDetails(provider_name, description, tags, attributes);
+    
+    if (response.has_registrationresult()) {
+        pImpl->stats.providers_registered++;
+        return response.registrationresult().providerid();
+    }
+    
+    if (response.has_exceptionalresult()) {
+        pImpl->last_error = response.exceptionalresult().message();
+        pImpl->stats.errors++;
+    }
+    
+    return std::nullopt;
+}
+
+RegisterProviderResponse IngestionClient::RegisterProviderWithDetails(
+    const std::string& provider_name,
+    const std::string& description,
+    const std::vector<std::string>& tags,
+    const std::vector<Attribute>& attributes) {
+    
+    RegisterProviderRequest request;
+    request.set_providername(provider_name);
+    if (!description.empty()) {
+        request.set_description(description);
     }
     
     for (const auto& tag : tags) {
         request.add_tags(tag);
     }
     
-    return registerProvider(request);
-}
-
-std::string IngestClient::ingestData(const IngestDataRequest& request) {
-    try {
-        dp::service::ingestion::IngestDataResponse response;
-        grpc::ClientContext context;
-        grpc::Status status = stub_->ingestData(&context, request, &response);
-
-        if (status.ok()) {
-            return "Success: Data ingested";
-        } else {
-            return "IngestData RPC failed: " + status.error_message();
-        }
-    } catch (const std::exception& e) {
-        return "Exception during ingest: " + std::string(e.what());
-    }
-}
-
-IngestionResult IngestClient::ingestBatch(const std::vector<IngestDataRequest>& requests, const std::string& provider_id) {
-    auto start_time = std::chrono::high_resolution_clock::now();
-
-    IngestionResult result;
-    result.total_requests = requests.size();
-    result.provider_id = provider_id;
-
-    if (requests.empty()) {
-        result.success = true;
-        return result;
-    }
-
-    auto chunks = chunkRequestsToVector(requests, config_.default_batch_size);
-
-    for (const auto& chunk : chunks) {
-        std::string chunk_result;
-        
-        if (config_.streaming_preferred && chunk.size() > 1) {
-            chunk_result = sendBatchToServerStream(chunk);
-        } else {
-            for (const auto& request : chunk) {
-                chunk_result = ingestData(request);
-                if (chunk_result.find("Success") == std::string::npos) {
-                    break;
-                }
-            }
-        }
-
-        if (chunk_result.find("Success") != std::string::npos) {
-            result.successful_requests += chunk.size();
-        } else {
-            result.failed_requests += chunk.size();
-            result.error_messages.push_back("Batch failed: " + chunk_result);
-        }
-
-        if (config_.enable_progress_monitoring) {
-            notifyProgress(result.successful_requests + result.failed_requests, result.total_requests, result.successful_requests);
-        }
-    }
-
-    auto end_time = std::chrono::high_resolution_clock::now();
-    result.processing_time_seconds = std::chrono::duration<double>(end_time - start_time).count();
-    result.success = (result.successful_requests > 0);
-
-    return result;
-}
-
-std::string IngestClient::sendBatchToServerStream(const std::vector<IngestDataRequest>& batch) {
-    if (batch.empty()) {
-        return "Success: Empty batch";
+    for (const auto& attr : attributes) {
+        *request.add_attributes() = attr;
     }
     
-    try {
-        grpc::ClientContext context;
-        dp::service::ingestion::IngestDataStreamResponse response;
+    RegisterProviderResponse response;
+    grpc::ClientContext context;
+    
+    auto deadline = std::chrono::system_clock::now() + 
+                   std::chrono::seconds(pImpl->default_timeout_seconds);
+    context.set_deadline(deadline);
+    
+    grpc::Status status = pImpl->stub->registerProvider(&context, request, &response);
+    
+    if (!status.ok()) {
+        pImpl->last_error = status.error_message();
+        pImpl->stats.errors++;
         
-        auto stream = stub_->ingestDataStream(&context, &response);
+        // Create exceptional result if not already present
+        if (!response.has_exceptionalresult()) {
+            auto* exceptional = response.mutable_exceptionalresult();
+            exceptional->set_exceptionalresultstatus(
+                ExceptionalResult_ExceptionalResultStatus_RESULT_STATUS_ERROR);
+            exceptional->set_message(status.error_message());
+        }
+    }
+    
+    return response;
+}
+
+// ========== Data Ingestion ==========
+
+bool IngestionClient::IngestData(
+    const std::string& provider_id,
+    const std::string& client_request_id,
+    const std::vector<DataColumn>& columns,
+    const DataTimestamps& timestamps,
+    const std::vector<std::string>& tags,
+    const std::vector<Attribute>& attributes,
+    const std::optional<EventMetadata>& event) {
+    
+    auto data_frame = CreateDataFrame(timestamps, columns);
+    auto response = IngestDataWithResponse(provider_id, client_request_id, 
+                                          data_frame, tags, attributes, event);
+    
+    if (response.has_ackresult()) {
+        pImpl->stats.data_ingested++;
+        return true;
+    }
+    
+    if (response.has_exceptionalresult()) {
+        pImpl->last_error = response.exceptionalresult().message();
+        pImpl->stats.errors++;
+    }
+    
+    return false;
+}
+
+IngestDataResponse IngestionClient::IngestDataWithResponse(
+    const std::string& provider_id,
+    const std::string& client_request_id,
+    const IngestionDataFrame& data_frame,
+    const std::vector<std::string>& tags,
+    const std::vector<Attribute>& attributes,
+    const std::optional<EventMetadata>& event) {
+    
+    IngestDataRequest request;
+    request.set_providerid(provider_id);
+    request.set_clientrequestid(client_request_id);
+    *request.mutable_ingestiondataframe() = data_frame;
+    
+    for (const auto& tag : tags) {
+        request.add_tags(tag);
+    }
+    
+    for (const auto& attr : attributes) {
+        *request.add_attributes() = attr;
+    }
+    
+    if (event.has_value()) {
+        *request.mutable_eventmetadata() = event.value();
+    }
+    
+    IngestDataResponse response;
+    grpc::ClientContext context;
+    
+    auto deadline = std::chrono::system_clock::now() + 
+                   std::chrono::seconds(pImpl->default_timeout_seconds);
+    context.set_deadline(deadline);
+    
+    grpc::Status status = pImpl->stub->ingestData(&context, request, &response);
+    
+    if (!status.ok()) {
+        pImpl->last_error = status.error_message();
+        pImpl->stats.errors++;
         
-        for (const auto& request : batch) {
-            if (!stream->Write(request)) {
-                return "Error: Failed to write request to stream";
+        if (!response.has_exceptionalresult()) {
+            auto* exceptional = response.mutable_exceptionalresult();
+            exceptional->set_exceptionalresultstatus(
+                ExceptionalResult_ExceptionalResultStatus_RESULT_STATUS_ERROR);
+            exceptional->set_message(status.error_message());
+        }
+    }
+    
+    return response;
+}
+
+IngestionDataFrame IngestionClient::CreateDataFrame(
+    const DataTimestamps& timestamps,
+    const std::vector<DataColumn>& columns) {
+    
+    IngestionDataFrame frame;
+    *frame.mutable_datatimestamps() = timestamps;
+    
+    for (const auto& column : columns) {
+        *frame.add_datacolumns() = column;
+    }
+    
+    return frame;
+}
+
+IngestionDataFrame IngestionClient::CreateDataFrameFromClock(
+    const SamplingClock& clock,
+    const std::vector<DataColumn>& columns) {
+    
+    DataTimestamps timestamps = pImpl->common_client.CreateDataTimestampsFromClock(clock);
+    return CreateDataFrame(timestamps, columns);
+}
+
+// ========== Streaming Ingestion ==========
+
+std::unique_ptr<IngestionClient::StreamIngestionSession> 
+IngestionClient::CreateStreamIngestionSession() {
+    auto context = std::make_shared<grpc::ClientContext>();
+    
+    auto deadline = std::chrono::system_clock::now() + 
+                   std::chrono::seconds(pImpl->default_timeout_seconds * 10); // Longer timeout for streams
+    context->set_deadline(deadline);
+    
+    IngestDataStreamResponse response;
+    auto writer = std::shared_ptr<grpc::ClientWriter<IngestDataRequest>>(
+        pImpl->stub->ingestDataStream(context.get(), &response));
+    
+    pImpl->stats.stream_sessions++;
+    
+    return std::make_unique<StreamIngestionSession>(writer, context);
+}
+
+std::unique_ptr<IngestionClient::BidiStreamIngestionSession> 
+IngestionClient::CreateBidiStreamIngestionSession() {
+    auto context = std::make_shared<grpc::ClientContext>();
+    
+    auto stream = std::shared_ptr<grpc::ClientReaderWriter<IngestDataRequest, IngestDataResponse>>(
+        pImpl->stub->ingestDataBidiStream(context.get()));
+    
+    pImpl->stats.stream_sessions++;
+    
+    return std::make_unique<BidiStreamIngestionSession>(stream, context);
+}
+
+// ========== Request Status Query ==========
+
+std::vector<RequestStatus> IngestionClient::QueryRequestStatusByProviderId(
+    const std::string& provider_id) {
+    
+    std::vector<QueryRequestStatusCriterion> criteria;
+    criteria.push_back(CreateProviderIdCriterion(provider_id));
+    
+    auto response = QueryRequestStatus(criteria);
+    
+    if (response.has_requeststatusresult()) {
+        std::vector<RequestStatus> results;
+        for (const auto& status : response.requeststatusresult().requeststatus()) {
+            results.push_back(status);
+        }
+        return results;
+    }
+    
+    return {};
+}
+
+std::vector<RequestStatus> IngestionClient::QueryRequestStatusByProviderName(
+    const std::string& provider_name) {
+    
+    std::vector<QueryRequestStatusCriterion> criteria;
+    criteria.push_back(CreateProviderNameCriterion(provider_name));
+    
+    auto response = QueryRequestStatus(criteria);
+    
+    if (response.has_requeststatusresult()) {
+        std::vector<RequestStatus> results;
+        for (const auto& status : response.requeststatusresult().requeststatus()) {
+            results.push_back(status);
+        }
+        return results;
+    }
+    
+    return {};
+}
+
+std::vector<RequestStatus> IngestionClient::QueryRequestStatusByRequestId(
+    const std::string& request_id) {
+    
+    std::vector<QueryRequestStatusCriterion> criteria;
+    criteria.push_back(CreateRequestIdCriterion(request_id));
+    
+    auto response = QueryRequestStatus(criteria);
+    
+    if (response.has_requeststatusresult()) {
+        std::vector<RequestStatus> results;
+        for (const auto& status : response.requeststatusresult().requeststatus()) {
+            results.push_back(status);
+        }
+        return results;
+    }
+    
+    return {};
+}
+
+std::vector<RequestStatus> IngestionClient::QueryRequestStatusByStatus(
+    IngestionRequestStatus status) {
+    
+    std::vector<QueryRequestStatusCriterion> criteria;
+    criteria.push_back(CreateStatusCriterion(status));
+    
+    auto response = QueryRequestStatus(criteria);
+    
+    if (response.has_requeststatusresult()) {
+        std::vector<RequestStatus> results;
+        for (const auto& status : response.requeststatusresult().requeststatus()) {
+            results.push_back(status);
+        }
+        return results;
+    }
+    
+    return {};
+}
+
+std::vector<RequestStatus> IngestionClient::QueryRequestStatusByTimeRange(
+    const Timestamp& start_time,
+    const Timestamp& end_time) {
+    
+    std::vector<QueryRequestStatusCriterion> criteria;
+    criteria.push_back(CreateTimeRangeCriterion(start_time, end_time));
+    
+    auto response = QueryRequestStatus(criteria);
+    
+    if (response.has_requeststatusresult()) {
+        std::vector<RequestStatus> results;
+        for (const auto& status : response.requeststatusresult().requeststatus()) {
+            results.push_back(status);
+        }
+        return results;
+    }
+    
+    return {};
+}
+
+QueryRequestStatusResponse IngestionClient::QueryRequestStatus(
+    const std::vector<QueryRequestStatusCriterion>& criteria) {
+    
+    QueryRequestStatusRequest request;
+    for (const auto& criterion : criteria) {
+        *request.add_criteria() = criterion;
+    }
+    
+    QueryRequestStatusResponse response;
+    grpc::ClientContext context;
+    
+    auto deadline = std::chrono::system_clock::now() + 
+                   std::chrono::seconds(pImpl->default_timeout_seconds);
+    context.set_deadline(deadline);
+    
+    grpc::Status status = pImpl->stub->queryRequestStatus(&context, request, &response);
+    
+    if (!status.ok()) {
+        pImpl->last_error = status.error_message();
+        pImpl->stats.errors++;
+        
+        if (!response.has_exceptionalresult()) {
+            auto* exceptional = response.mutable_exceptionalresult();
+            exceptional->set_exceptionalresultstatus(
+                ExceptionalResult_ExceptionalResultStatus_RESULT_STATUS_ERROR);
+            exceptional->set_message(status.error_message());
+        }
+    }
+    
+    return response;
+}
+
+QueryRequestStatusCriterion IngestionClient::CreateProviderIdCriterion(
+    const std::string& provider_id) {
+    
+    QueryRequestStatusCriterion criterion;
+    criterion.mutable_provideridcriterion()->set_providerid(provider_id);
+    return criterion;
+}
+
+QueryRequestStatusCriterion IngestionClient::CreateProviderNameCriterion(
+    const std::string& provider_name) {
+    
+    QueryRequestStatusCriterion criterion;
+    criterion.mutable_providernamecriterion()->set_providername(provider_name);
+    return criterion;
+}
+
+QueryRequestStatusCriterion IngestionClient::CreateRequestIdCriterion(
+    const std::string& request_id) {
+    
+    QueryRequestStatusCriterion criterion;
+    criterion.mutable_requestidcriterion()->set_requestid(request_id);
+    return criterion;
+}
+
+QueryRequestStatusCriterion IngestionClient::CreateStatusCriterion(
+    IngestionRequestStatus status) {
+    
+    QueryRequestStatusCriterion criterion;
+    criterion.mutable_statuscriterion()->add_status(status);
+    return criterion;
+}
+
+QueryRequestStatusCriterion IngestionClient::CreateTimeRangeCriterion(
+    const Timestamp& start, const Timestamp& end) {
+    
+    QueryRequestStatusCriterion criterion;
+    auto* time_range = criterion.mutable_timerangecriterion();
+    *time_range->mutable_begintime() = start;
+    *time_range->mutable_endtime() = end;
+    return criterion;
+}
+
+// ========== Data Subscription ==========
+
+std::unique_ptr<IngestionClient::SubscriptionSession> 
+IngestionClient::CreateSubscriptionSession() {
+    
+    auto context = std::make_shared<grpc::ClientContext>();
+    
+    auto stream = std::shared_ptr<grpc::ClientReaderWriter<SubscribeDataRequest, SubscribeDataResponse>>(
+        pImpl->stub->subscribeData(context.get()));
+    
+    pImpl->stats.subscriptions++;
+    
+    return std::make_unique<SubscriptionSession>(stream, context);
+}
+
+std::future<void> IngestionClient::SubscribeToData(
+    const std::vector<std::string>& pv_names,
+    std::function<void(const SubscribeDataResult&)> callback,
+    std::function<void(const std::string&)> error_callback) {
+    
+    return std::async(std::launch::async, [this, pv_names, callback, error_callback]() {
+        auto session = CreateSubscriptionSession();
+        
+        if (!session->Subscribe(pv_names)) {
+            if (error_callback) {
+                error_callback("Failed to subscribe to PVs");
+            }
+            return;
+        }
+        
+        // Read acknowledgment
+        auto ack = session->ReadResponse();
+        if (!ack.has_value() || !ack->has_ackresult()) {
+            if (error_callback) {
+                error_callback("Failed to receive subscription acknowledgment");
+            }
+            return;
+        }
+        
+        // Start reading data
+        while (session->IsActive()) {
+            auto response = session->ReadResponse();
+            if (response.has_value()) {
+                if (response->has_subscribedataresult()) {
+                    callback(response->subscribedataresult());
+                } else if (response->has_exceptionalresult() && error_callback) {
+                    error_callback(response->exceptionalresult().message());
+                    break;
+                }
+            } else {
+                break;  // Stream ended
             }
         }
-        
-        stream->WritesDone();
-        grpc::Status status = stream->Finish();
-        
-        if (status.ok()) {
-            return "Success: Batch of " + std::to_string(batch.size()) + " requests processed";
-        } else {
-            return "Error: " + status.error_message();
-        }
-        
-    } catch (const std::exception& e) {
-        return "Exception: " + std::string(e.what());
-    }
+    });
 }
 
-std::vector<std::vector<IngestDataRequest>> IngestClient::chunkRequestsToVector(const std::vector<IngestDataRequest>& requests, size_t chunk_size) const {
-    std::vector<std::vector<IngestDataRequest>> chunks;
-    chunks.reserve((requests.size() + chunk_size - 1) / chunk_size);
+// ========== Utility Methods ==========
 
-    for (size_t i = 0; i < requests.size(); i += chunk_size) {
-        size_t end = std::min(i + chunk_size, requests.size());
-        chunks.emplace_back(requests.begin() + i, requests.begin() + end);
-    }
-
-    return chunks;
+bool IngestionClient::IsConnected() const {
+    return pImpl->channel->GetState(false) == GRPC_CHANNEL_READY;
 }
 
-void IngestClient::enableSpatialEnrichment(bool enable) {
-    spatial_enrichment_enabled_ = false; // Always disabled for fast ingestion
+grpc_connectivity_state IngestionClient::GetChannelState() const {
+    return pImpl->channel->GetState(false);
 }
 
-bool IngestClient::isSpatialEnrichmentEnabled() const {
-    return false; // Always disabled
+bool IngestionClient::WaitForConnection(int timeout_seconds) {
+    auto deadline = std::chrono::system_clock::now() + 
+                   std::chrono::seconds(timeout_seconds);
+    return pImpl->channel->WaitForConnected(deadline);
 }
 
-SpatialContext IngestClient::enrichPvName(const std::string& pv_name) const {
-    return SpatialContext{}; // Return empty context
+void IngestionClient::SetDefaultTimeout(int seconds) {
+    pImpl->default_timeout_seconds = seconds;
 }
 
-bool IngestClient::isConnected() const {
-    return stub_ != nullptr;
+int IngestionClient::GetDefaultTimeout() const {
+    return pImpl->default_timeout_seconds;
 }
 
-void IngestClient::reconnect() {
-    initializeConnection();
+std::string IngestionClient::GetLastError() const {
+    return pImpl->last_error;
 }
 
-void IngestClient::updateConfig(const IngestClientConfig& config) {
-    config_ = config;
-    initializeConnection();
+void IngestionClient::ClearLastError() {
+    pImpl->last_error.clear();
 }
 
-void IngestClient::notifyProgress(size_t processed, size_t total, size_t successful) const {
-    if (progress_callback_) {
-        progress_callback_(processed, total, successful);
-    }
+IngestionClient::ClientStats IngestionClient::GetStats() const {
+    return pImpl->stats;
 }
 
-void IngestClient::notifyError(const std::string& error, const std::string& context) const {
-    if (error_callback_) {
-        error_callback_(error, context);
-    }
+void IngestionClient::ResetStats() {
+    pImpl->stats = ClientStats{};
 }
 
-// ===================== Helper Functions Implementation =====================
-
-Timestamp makeTimeStamp(uint64_t epoch, uint64_t nano) {
-    Timestamp ts;
-    ts.set_epochseconds(epoch);
-    ts.set_nanoseconds(nano);
-    return ts;
-}
-
-Attribute makeAttribute(const std::string& name, const std::string& value) {
-    Attribute attr;
-    attr.set_name(name);
-    attr.set_value(value);
-    return attr;
-}
-
-EventMetadata makeEventMetadata(const std::string& desc, uint64_t startEpoch, uint64_t startNano,
-                                uint64_t endEpoch, uint64_t endNano) {
-    EventMetadata meta;
-    meta.set_description(desc);
-    *meta.mutable_starttimestamp() = makeTimeStamp(startEpoch, startNano);
-    *meta.mutable_stoptimestamp() = makeTimeStamp(endEpoch, endNano);
-    return meta;
-}
-
-SamplingClock makeSamplingClock(uint64_t epoch, uint64_t nano, uint64_t periodNanos, uint32_t count) {
-    SamplingClock clk;
-    *clk.mutable_starttime() = makeTimeStamp(epoch, nano);
-    clk.set_periodnanos(periodNanos);
-    clk.set_count(count);
-    return clk;
-}
-
-DataValue makeDataValueWithSInt32(int val) {
-    DataValue dv;
-    dv.set_intvalue(val);
-    return dv;
-}
-
-DataValue makeDataValueWithUInt64(uint64_t val) {
-    DataValue dv;
-    dv.set_ulongvalue(val);
-    return dv;
-}
-
-DataValue makeDataValueWithDouble(double val){
-    DataValue dv;
-    dv.set_doublevalue(val);
-    return dv;
-}
-
-DataValue makeDataValueWithTimestamp(uint64_t sec, uint64_t nano) {
-    DataValue dv;
-    *dv.mutable_timestampvalue() = makeTimeStamp(sec, nano);
-    return dv;
-}
-
-DataColumn makeDataColumn(const std::string& name, const std::vector<DataValue>& values) {
-    DataColumn col;
-    col.set_name(name);
-    for (const auto& v : values)
-        *col.add_datavalues() = v;
-    return col;
-}
-
-IngestDataRequest makeIngestDataRequest(const std::string& providerId,
-                                        const std::string& clientRequestId,
-                                        const std::vector<Attribute>& attributes,
-                                        const std::vector<std::string>& tags,
-                                        const EventMetadata& metadata,
-                                        const SamplingClock& clock,
-                                        const std::vector<DataColumn>& columns) {
-    IngestDataRequest req;
-    req.set_providerid(providerId);
-    req.set_clientrequestid(clientRequestId);
-    for (const auto& attr : attributes)
-        *req.add_attributes() = attr;
-    for (const auto& tag : tags)
-        req.add_tags(tag);
-    *req.mutable_eventmetadata() = metadata;
-
-    auto* frame = req.mutable_ingestiondataframe();
-    *frame->mutable_datatimestamps()->mutable_samplingclock() = clock;
-    for (const auto& c : columns)
-        *frame->add_datacolumns() = c;
-    return req;
-}
-
-// ===================== Utility Functions =====================
-
-namespace IngestUtils {
-    uint64_t getCurrentEpochSeconds() {
-        return std::chrono::system_clock::now().time_since_epoch() / std::chrono::seconds(1);
-    }
-
-    uint64_t getCurrentEpochNanos() {
-        return std::chrono::duration_cast<std::chrono::nanoseconds>(
-            std::chrono::system_clock::now().time_since_epoch()).count();
-    }
-
-    std::string generateRequestId(const std::string& prefix) {
-        return prefix + "_" + std::to_string(getCurrentEpochSeconds()) + "_" +
-               std::to_string(std::chrono::high_resolution_clock::now().time_since_epoch().count() % 1000000);
-    }
+CommonClient& IngestionClient::GetCommonClient() {
+    return pImpl->common_client;
 }

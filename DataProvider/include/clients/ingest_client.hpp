@@ -4,171 +4,253 @@
 #include <string>
 #include <vector>
 #include <memory>
+#include <optional>
 #include <functional>
-#include <unordered_map>
-#include <nlohmann/json.hpp>
-#include "common.pb.h"
+#include <future>
+#include <map>
+#include <queue>
+#include <grpcpp/grpcpp.h>
+
+#include "common_client.hpp"  // Use our common client for shared types
 #include "ingestion.pb.h"
 #include "ingestion.grpc.pb.h"
-#include "spatial_analyzer.hpp"
 
-using Timestamp = ::Timestamp;
-using Attribute = ::Attribute;
-using EventMetadata = ::EventMetadata;
-using SamplingClock = ::SamplingClock;
-using DataValue = ::DataValue;
-using DataColumn = ::DataColumn;
-using IngestDataRequest = dp::service::ingestion::IngestDataRequest;
-using RegisterProviderRequest = dp::service::ingestion::RegisterProviderRequest;
-using RegisterProviderResponse = dp::service::ingestion::RegisterProviderResponse;
+// Ingestion-specific type aliases
+using RegisterProviderRequest = ::dp::service::ingestion::RegisterProviderRequest;
+using RegisterProviderResponse = ::dp::service::ingestion::RegisterProviderResponse;
+using RegistrationResult = ::dp::service::ingestion::RegisterProviderResponse::RegistrationResult;
 
-// Configuration structure
-struct IngestClientConfig {
-    std::string server_address = "localhost:50051";
-    int connection_timeout_seconds = 5;
-    int max_message_size_mb = 64;
-    bool enable_spatial_enrichment = true;
-    std::string dictionaries_path = "config/dictionaries/";
-    size_t default_batch_size = 100;
-    size_t max_batch_size = 1000;
-    bool streaming_preferred = true;
-    int retry_attempts = 3;
-    int retry_delay_ms = 1000;
-    bool enable_progress_monitoring = true;
+using IngestDataRequest = ::dp::service::ingestion::IngestDataRequest;
+using IngestDataResponse = ::dp::service::ingestion::IngestDataResponse;
+using IngestionDataFrame = ::dp::service::ingestion::IngestDataRequest::IngestionDataFrame;
+using AckResult = ::dp::service::ingestion::IngestDataResponse::AckResult;
 
-    static IngestClientConfig fromConfigFile(const std::string& config_path);
-    static IngestClientConfig fromJson(const nlohmann::json& config);
-};
+using IngestDataStreamResponse = ::dp::service::ingestion::IngestDataStreamResponse;
+using IngestDataStreamResult = ::dp::service::ingestion::IngestDataStreamResponse::IngestDataStreamResult;
 
-// Callback types for progress monitoring
-using ProgressCallback = std::function<void(size_t processed, size_t total, size_t successful)>;
-using ErrorCallback = std::function<void(const std::string& error, const std::string& context)>;
+using QueryRequestStatusRequest = ::dp::service::ingestion::QueryRequestStatusRequest;
+using QueryRequestStatusCriterion = ::dp::service::ingestion::QueryRequestStatusRequest::QueryRequestStatusCriterion;
+using QueryRequestStatusResponse = ::dp::service::ingestion::QueryRequestStatusResponse;
+using RequestStatusResult = ::dp::service::ingestion::QueryRequestStatusResponse::RequestStatusResult;
+using RequestStatus = ::dp::service::ingestion::QueryRequestStatusResponse::RequestStatusResult::RequestStatus;
 
-// Spatial context structure
-struct SpatialContext {
-    std::string beam_path;
-    std::string area;
-    std::vector<double> z_coordinates;
-    int area_sequence_index = -1;
-    std::string sector;
-    std::string device_class;
-    std::string area_description;
-    std::string device_type;
-    std::string device_location;
-    std::string device_attribute;
-    std::string full_pv_name;
+using SubscribeDataRequest = ::dp::service::ingestion::SubscribeDataRequest;
+using NewSubscription = ::dp::service::ingestion::SubscribeDataRequest::NewSubscription;
+using CancelSubscription = ::dp::service::ingestion::SubscribeDataRequest::CancelSubscription;
+using SubscribeDataResponse = ::dp::service::ingestion::SubscribeDataResponse;
+using SubscribeDataResult = ::dp::service::ingestion::SubscribeDataResponse::SubscribeDataResult;
 
-    bool isValid() const {
-        return !beam_path.empty() && !area.empty() && area_sequence_index >= 0;
-    }
+using IngestionRequestStatus = ::dp::service::ingestion::IngestionRequestStatus;
+using DpIngestionService = ::dp::service::ingestion::DpIngestionService;
 
-    std::vector<double> getDeviceCoordinates() const {
-        return z_coordinates;
-    }
-
-    std::string getLocationId() const {
-        if (!area.empty() && !device_location.empty()) {
-            return area + "_" + device_location;
-        }
-        return area;
-    }
-};
-
-// Result structures
-struct IngestionResult {
-    bool success = false;
-    size_t total_requests = 0;
-    size_t successful_requests = 0;
-    size_t failed_requests = 0;
-    std::vector<std::string> error_messages;
-    std::string provider_id;
-    double processing_time_seconds = 0.0;
-
-    double getSuccessRate() const {
-        return total_requests > 0 ? static_cast<double>(successful_requests) / total_requests : 0.0;
-    }
-};
-
-class IngestClient {
+class IngestionClient {
 public:
-    explicit IngestClient(const IngestClientConfig& config);
-    explicit IngestClient(const std::string& config_file_path);
-    ~IngestClient();
+    // Constructor with channel
+    explicit IngestionClient(std::shared_ptr<grpc::Channel> channel);
+    
+    // Constructor with address
+    explicit IngestionClient(const std::string& server_address);
+    
+    ~IngestionClient();
 
-    // Provider registration
-    RegisterProviderResponse registerProvider(const RegisterProviderRequest& request);
-    RegisterProviderResponse registerProvider(const std::string& name,
-                                             const std::vector<Attribute>& attributes,
-                                             const std::vector<std::string>& tags);
-
-    // Data ingestion methods
-    std::string ingestData(const IngestDataRequest& request);
-    IngestionResult ingestBatch(const std::vector<IngestDataRequest>& requests, const std::string& provider_id);
-
-    // Configuration and callbacks
-    void setProgressCallback(ProgressCallback callback) { progress_callback_ = callback; }
-    void setErrorCallback(ErrorCallback callback) { error_callback_ = callback; }
-    const IngestClientConfig& getConfig() const { return config_; }
-    void updateConfig(const IngestClientConfig& config);
-
-    // Spatial enrichment control
-    void enableSpatialEnrichment(bool enable = true);
-    bool isSpatialEnrichmentEnabled() const;
-    SpatialContext enrichPvName(const std::string& pv_name) const;
-
-    // Connection management
-    bool isConnected() const;
-    void reconnect();
-
+    // ========== Provider Registration ==========
+    
+    // Register a new provider
+    std::optional<std::string> RegisterProvider(
+        const std::string& provider_name,
+        const std::string& description = "",
+        const std::vector<std::string>& tags = {},
+        const std::vector<Attribute>& attributes = {});
+    
+    // Register provider with full response details
+    RegisterProviderResponse RegisterProviderWithDetails(
+        const std::string& provider_name,
+        const std::string& description = "",
+        const std::vector<std::string>& tags = {},
+        const std::vector<Attribute>& attributes = {});
+    
+    // ========== Data Ingestion (Unary) ==========
+    
+    // Simple data ingestion
+    bool IngestData(
+        const std::string& provider_id,
+        const std::string& client_request_id,
+        const std::vector<DataColumn>& columns,
+        const DataTimestamps& timestamps,
+        const std::vector<std::string>& tags = {},
+        const std::vector<Attribute>& attributes = {},
+        const std::optional<EventMetadata>& event = std::nullopt);
+    
+    // Ingest data with full response
+    IngestDataResponse IngestDataWithResponse(
+        const std::string& provider_id,
+        const std::string& client_request_id,
+        const IngestionDataFrame& data_frame,
+        const std::vector<std::string>& tags = {},
+        const std::vector<Attribute>& attributes = {},
+        const std::optional<EventMetadata>& event = std::nullopt);
+    
+    // Helper to create data frame
+    IngestionDataFrame CreateDataFrame(
+        const DataTimestamps& timestamps,
+        const std::vector<DataColumn>& columns);
+    
+    // Helper to create data frame from sampling clock
+    IngestionDataFrame CreateDataFrameFromClock(
+        const SamplingClock& clock,
+        const std::vector<DataColumn>& columns);
+    
+    // ========== Streaming Data Ingestion ==========
+    
+    // Client-side streaming ingestion
+    class StreamIngestionSession {
+    public:
+        StreamIngestionSession(std::shared_ptr<grpc::ClientWriter<IngestDataRequest>> writer,
+                              std::shared_ptr<grpc::ClientContext> context);
+        
+        bool SendData(const IngestDataRequest& request);
+        bool SendData(const std::string& provider_id,
+                     const std::string& client_request_id,
+                     const IngestionDataFrame& data_frame);
+        
+        IngestDataStreamResponse Finish();
+        void Cancel();
+        
+    private:
+        class Impl;
+        std::unique_ptr<Impl> pImpl;
+    };
+    
+    std::unique_ptr<StreamIngestionSession> CreateStreamIngestionSession();
+    
+    // Bidirectional streaming ingestion
+    class BidiStreamIngestionSession {
+    public:
+        BidiStreamIngestionSession(
+            std::shared_ptr<grpc::ClientReaderWriter<IngestDataRequest, IngestDataResponse>> stream,
+            std::shared_ptr<grpc::ClientContext> context);
+        
+        bool SendData(const IngestDataRequest& request);
+        std::optional<IngestDataResponse> ReadResponse();
+        bool WaitForResponse(IngestDataResponse& response, int timeout_ms = 1000);
+        
+        void CloseSending();
+        std::vector<IngestDataResponse> ReadAllResponses();
+        
+    private:
+        class Impl;
+        std::unique_ptr<Impl> pImpl;
+    };
+    
+    std::unique_ptr<BidiStreamIngestionSession> CreateBidiStreamIngestionSession();
+    
+    // ========== Request Status Query ==========
+    
+    // Query by provider ID
+    std::vector<RequestStatus> QueryRequestStatusByProviderId(const std::string& provider_id);
+    
+    // Query by provider name
+    std::vector<RequestStatus> QueryRequestStatusByProviderName(const std::string& provider_name);
+    
+    // Query by request ID
+    std::vector<RequestStatus> QueryRequestStatusByRequestId(const std::string& request_id);
+    
+    // Query by status
+    std::vector<RequestStatus> QueryRequestStatusByStatus(IngestionRequestStatus status);
+    
+    // Query by time range
+    std::vector<RequestStatus> QueryRequestStatusByTimeRange(
+        const Timestamp& start_time,
+        const Timestamp& end_time);
+    
+    // Query with multiple criteria
+    QueryRequestStatusResponse QueryRequestStatus(
+        const std::vector<QueryRequestStatusCriterion>& criteria);
+    
+    // Helper to create criteria
+    QueryRequestStatusCriterion CreateProviderIdCriterion(const std::string& provider_id);
+    QueryRequestStatusCriterion CreateProviderNameCriterion(const std::string& provider_name);
+    QueryRequestStatusCriterion CreateRequestIdCriterion(const std::string& request_id);
+    QueryRequestStatusCriterion CreateStatusCriterion(IngestionRequestStatus status);
+    QueryRequestStatusCriterion CreateTimeRangeCriterion(const Timestamp& start, const Timestamp& end);
+    
+    // ========== Data Subscription ==========
+    
+    class SubscriptionSession {
+    public:
+        using DataCallback = std::function<void(const SubscribeDataResult&)>;
+        using ErrorCallback = std::function<void(const ExceptionalResult&)>;
+        
+        SubscriptionSession(
+            std::shared_ptr<grpc::ClientReaderWriter<SubscribeDataRequest, SubscribeDataResponse>> stream,
+            std::shared_ptr<grpc::ClientContext> context);
+        
+        // Subscribe to PVs
+        bool Subscribe(const std::vector<std::string>& pv_names);
+        
+        // Cancel subscription
+        bool CancelSubscription();
+        
+        // Read responses
+        std::optional<SubscribeDataResponse> ReadResponse();
+        
+        // Start async reading with callbacks
+        void StartAsyncReading(DataCallback on_data, ErrorCallback on_error = nullptr);
+        void StopAsyncReading();
+        
+        // Check if subscription is active
+        bool IsActive() const;
+        
+    private:
+        class Impl;
+        std::unique_ptr<Impl> pImpl;
+    };
+    
+    std::unique_ptr<SubscriptionSession> CreateSubscriptionSession();
+    
+    // Simple subscription with callback
+    std::future<void> SubscribeToData(
+        const std::vector<std::string>& pv_names,
+        std::function<void(const SubscribeDataResult&)> callback,
+        std::function<void(const std::string&)> error_callback = nullptr);
+    
+    // ========== Utility Methods ==========
+    
+    // Check if connected
+    bool IsConnected() const;
+    
+    // Get channel state
+    grpc_connectivity_state GetChannelState() const;
+    
+    // Wait for connection
+    bool WaitForConnection(int timeout_seconds = 10);
+    
+    // Get/set timeout for operations
+    void SetDefaultTimeout(int seconds);
+    int GetDefaultTimeout() const;
+    
+    // Error handling
+    std::string GetLastError() const;
+    void ClearLastError();
+    
+    // Statistics
+    struct ClientStats {
+        uint64_t providers_registered = 0;
+        uint64_t data_ingested = 0;
+        uint64_t stream_sessions = 0;
+        uint64_t subscriptions = 0;
+        uint64_t errors = 0;
+    };
+    
+    ClientStats GetStats() const;
+    void ResetStats();
+    
+    // Access to common client for shared operations
+    CommonClient& GetCommonClient();
+    
 private:
-    IngestClientConfig config_;
-    std::unique_ptr<dp::service::ingestion::DpIngestionService::Stub> stub_;
-    std::unique_ptr<SpatialAnalyzer> spatial_analyzer_;
-    
-    ProgressCallback progress_callback_;
-    ErrorCallback error_callback_;
-
-    bool spatial_enrichment_enabled_;
-
-    // Internal methods
-    void initializeConnection();
-    void initializeSpatialAnalyzer();
-    
-    // Spatial enrichment with caching
-    IngestDataRequest enrichRequest(const IngestDataRequest& request) const;
-    std::vector<IngestDataRequest> enrichRequestsBatch(const std::vector<IngestDataRequest>& requests) const;
-    
-    // Bulk operation helpers  
-    std::string sendBatchToServerStream(const std::vector<IngestDataRequest>& batch);
-    std::vector<std::vector<IngestDataRequest>> chunkRequestsToVector(const std::vector<IngestDataRequest>& requests,
-                                                                     size_t chunk_size) const;
-    
-    // Monitoring and callbacks
-    void notifyProgress(size_t processed, size_t total, size_t successful) const;
-    void notifyError(const std::string& error, const std::string& context) const;
+    class Impl;
+    std::unique_ptr<Impl> pImpl;
 };
 
-// Helper function declarations
-Timestamp makeTimeStamp(uint64_t epoch, uint64_t nano);
-Attribute makeAttribute(const std::string& name, const std::string& value);
-EventMetadata makeEventMetadata(const std::string& desc, uint64_t startEpoch, uint64_t startNano,
-                               uint64_t endEpoch, uint64_t endNano);
-SamplingClock makeSamplingClock(uint64_t epoch, uint64_t nano, uint64_t periodNanos, uint32_t count);
-DataValue makeDataValueWithSInt32(int val);
-DataValue makeDataValueWithUInt64(uint64_t val);
-DataValue makeDataValueWithDouble(double val);
-DataValue makeDataValueWithTimestamp(uint64_t sec, uint64_t nano);
-DataColumn makeDataColumn(const std::string& name, const std::vector<DataValue>& values);
-IngestDataRequest makeIngestDataRequest(const std::string& providerId, const std::string& clientRequestId,
-                                       const std::vector<Attribute>& attributes, const std::vector<std::string>& tags,
-                                       const EventMetadata& metadata, const SamplingClock& samplingClock,
-                                       const std::vector<DataColumn>& dataColumns);
-
-// Utility functions
-namespace IngestUtils {
-    uint64_t getCurrentEpochSeconds();
-    uint64_t getCurrentEpochNanos();
-    std::string generateRequestId(const std::string& prefix = "req");
-}
-
-#endif // INGEST_CLIENT_HPP
+#endif
